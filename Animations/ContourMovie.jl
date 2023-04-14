@@ -47,7 +47,7 @@ setname = args["paramset"]
 resS = args["resScale"]
 @info "Loading in parameters..."
 
-include("parameters.jl")
+include("../parameters.jl")
 pm = getproperty(SimParams(), Symbol(setname))
 
 dzr = pm.dz * resS
