@@ -100,80 +100,89 @@ for (m, setname) in enumerate(setnames)
     filepath = path_name * name_prefix * ".jld2"
 
     e_timeseries = FieldTimeSeries(filepath, "ϵ");
-    xe, ye, ze = nodes(e_timeseries) #CCC
 
-    ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
+    # only include simulation in count if it ran long enough
 
-    @info "Calculating Global Averages..."
-    e_xavg = mean(ei, dims=1)[1,:,:,:];
+    tfin = e_timeseries.times[end]
+    wave10 = pm2.Tσ*10
+    if tfin >= wave10
+            
+        xe, ye, ze = nodes(e_timeseries) #CCC
 
-    Ygrid = reshape(repeat(ye[1:ylength], zlength), ylength, zlength)
-    SlopeGrid = curvedslope.(Ygrid)
-    boolZ = (SlopeGrid .+ 4) .> ze[1:zlength]'
-    # above slope values at each time step
-    e_fvals = e_xavg[boolZ,:]
+        ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
 
-    e_xyzavg = mean(e_fvals, dims = 1)[1,:]
+        @info "Calculating Global Averages..."
+        e_xavg = mean(ei, dims=1)[1,:,:,:];
 
-    tlength = length(e_timeseries.times)
+        Ygrid = reshape(repeat(ye[1:ylength], zlength), ylength, zlength)
+        SlopeGrid = curvedslope.(Ygrid)
+        boolZ = (SlopeGrid .+ 4) .> ze[1:zlength]'
+        # above slope values at each time step
+        e_fvals = e_xavg[boolZ,:]
 
-    e_xyzavg_cutoff = zeros(tlength)
+        e_xyzavg = mean(e_fvals, dims = 1)[1,:]
 
-    for i = 1:tlength
-        tbool = e_fvals[:,i] .> 1e-9 # changing up a order to -4 orders less than expected avg for smallest avg
-        if sum(tbool) > 0
-            e_xyzavg_cutoff[i] = mean(e_fvals[tbool, i])
+        tlength = length(e_timeseries.times)
+
+        e_xyzavg_cutoff = zeros(tlength)
+
+        for i = 1:tlength
+            tbool = e_fvals[:,i] .> 1e-7 # changing up a order to -4 orders less than expected avg for smallest avg
+            if sum(tbool) > 0
+                e_xyzavg_cutoff[i] = mean(e_fvals[tbool, i])
+            end
         end
-    end
 
-    @info "Computing Rolling Wave Averages..."
-    # averages based on true wave times not consistent across N varying sims
-    include("WaveValues.jl")
-    wave_info=get_wave_indices(e_timeseries, pm2, tlength)
+        @info "Computing Rolling Wave Averages..."
+        # averages based on true wave times not consistent across N varying sims
+        include("WaveValues.jl")
+        wave_info=get_wave_indices(e_timeseries, pm2, tlength)
 
-    Wl = wave_info.Wl
-    wav_arr_length = Wl*wave_info.nTσ
-    wav_Avgarr_length = wav_arr_length - 2*Wl
+        Wl = wave_info.Wl
+        wav_arr_length = Wl*wave_info.nTσ
+        wav_Avgarr_length = wav_arr_length - 2*Wl
 
-    # global value in time
-    eps_glob_Wavg_cut = zeros(wav_Avgarr_length);
-
-    for (ki, tk) in enumerate(wave_info.WavePeriods[Wl+1:end-Wl])
         # global value in time
-        eps_glob_Wavg_cut[ki] = mean(e_xyzavg_cutoff[wave_info.WavePeriods[tk-Wl:tk+Wl]])
+        eps_glob_Wavg_cut = zeros(wav_Avgarr_length);
+
+        for (ki, tk) in enumerate(wave_info.WavePeriods[Wl+1:end-Wl])
+            # glo2Wlbal value in time
+            Widxs = wave_info.WavePeriods[ki:ki+2*Wl] 
+            eps_glob_Wavg_cut[ki] = mean(e_xyzavg_cutoff[Widxs])
+        end
+
+        @info "Averaging over waves 6-10 and 2-5..."
+        # you have completed 1 wave by T_Tσs[2]
+        Tσ6_idx = wave_info.T_Tσs[7] # completion of 6 waves
+        Tσ10_idx = wave_info.T_Tσs[11] # completion of 10 waves
+
+        Tσ2_idx = wave_info.T_Tσs[3] # completion of 2 waves
+        Tσ5_idx = wave_info.T_Tσs[6]
+
+        eps_avg_Wavg_25Avg_cut = mean(e_xyzavg_cutoff[Tσ2_idx-Wl:Tσ5_idx-Wl])
+        eps_avg_Wavg_610Avg_cut = mean(e_xyzavg_cutoff[Tσ6_idx-Wl:Tσ10_idx-Wl])
+
+        wavetimes = 1:1/Wl:((wav_Avgarr_length+(Wl-1))/Wl)
+        
+        @info "Plotting..."
+
+        big_title = @sprintf("Mean Dissipation>10⁻⁹, U₀=%0.2f, N=%0.2f×10⁻³, δ=%0.1f", pm2.U₀, 10^3*pm2.Ñ, pm2.U₀/pm2.Ñ)
+        
+        ep2 = plot(wavetimes, eps_glob_Wavg_cut, lw = 5, color = :green,
+                label=@sprintf("<ϵ̄>₆_₁₀= %0.4f × 10⁻⁶", eps_avg_Wavg_610Avg_cut*1e6),
+                xlabel = "Tσ", ylabel="ϵ̄ [m²s⁻³]", legend_font = font(16), 
+                guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=10.0mm, left_margin=10.0mm, right_margin=20.0mm,
+                legend = :bottomleft, size = (1000,800), title = big_title)
+            plot!(wavetimes, eps_glob_Wavg_cut, lw = 5, color = :green,
+                label=@sprintf("<ϵ̄>₂₋₅ = %0.4f × 10⁻⁶", eps_avg_Wavg_25Avg_cut*1e6))
+
+        savefig(ep2, apath * "Dissip_Fix_" * setname * ".png")
+
+        # average dissipation over waves 2-5
+        eps_beginAvg[m] = eps_avg_Wavg_25Avg_cut
+        # average dissipation over waves 6-10
+        eps_endAvg[m] = eps_avg_Wavg_610Avg_cut
     end
-
-    @info "Averaging over waves 6-10 and 2-5..."
-    # you have completed 1 wave by T_Tσs[2]
-    Tσ6_idx = wave_info.T_Tσs[7] # completion of 6 waves
-    Tσ10_idx = wave_info.T_Tσs[11] # completion of 10 waves
-
-    Tσ2_idx = wave_info.T_Tσs[3] # completion of 2 waves
-    Tσ5_idx = wave_info.T_Tσs[6]
-
-    eps_avg_Wavg_25Avg_cut = mean(e_xyzavg_cutoff[Tσ2_idx-Wl:Tσ5_idx-Wl])
-    eps_avg_Wavg_610Avg_cut = mean(e_xyzavg_cutoff[Tσ6_idx-Wl:Tσ10_idx-Wl])
-
-    wavetimes = 1:1/Wl:((wav_Avgarr_length+(Wl-1))/Wl)
-       
-    @info "Plotting..."
-
-    big_title = @sprintf("Mean Dissipation>10⁻⁹, U₀=%0.2f, N=%0.2f×10⁻³, δ=%0.1f", pm2.U₀, 10^3*pm2.Ñ, pm2.U₀/pm2.Ñ)
-    
-    ep2 = plot(wavetimes, eps_glob_Wavg_cut, lw = 5, color = :green,
-            label=@sprintf("<ϵ̄>₆_₁₀= %0.4f × 10⁻⁶", eps_avg_Wavg_610Avg_cut*1e6),
-            xlabel = "Tσ", ylabel="ϵ̄ [m²s⁻³]", legend_font = font(16), 
-            guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=10.0mm, left_margin=10.0mm, right_margin=20.0mm,
-            legend = :bottomleft, size = (1000,800), title = big_title)
-        plot!(wavetimes, eps_glob_Wavg_cut, lw = 5, color = :green,
-            label=@sprintf("<ϵ̄>₂₋₅ = %0.4f × 10⁻⁶", eps_avg_Wavg_25Avg_cut*1e6))
-
-    savefig(ep2, apath * "Dissip_Fix_" * setname * ".png")
-
-    # average dissipation over waves 2-5
-    eps_beginAvg[m] = eps_avg_Wavg_25Avg_cut
-    # average dissipation over waves 6-10
-    eps_endAvg[m] = eps_avg_Wavg_610Avg_cut
 end
 
 # plot statistics compared to delta values
