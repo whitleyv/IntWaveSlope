@@ -15,16 +15,23 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
 const gausT_width = 180
 const ySlopeSameˢ = 1332.22                           # point where planar and curved corner math up the best
- 
-sn = "U150N100Lz100g70s125"
+
+apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
+
+sn = "U250Nfd250Lz100g100"
+
+resS = 1.0
 
 include("parameters.jl")
-#include("../parameters.jl")
+
 pm = getproperty(SimParams(), Symbol(sn))
 
-pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
+dzr = pm.dz * resS
+dhr = pm.dh * resS
+
+pm = merge(pm, (; dzr=dzr, dhr=dhr, Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
                 Tanα = pm.γ * sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
-                nz = round(Int,pm.Lz/2),
+                nz = round(Int,pm.Lz/2), nx = round(Int, pm.Lx/dhr),
                 m = -π/pm.Lz,
                 l = sqrt(((π/pm.Lz)^2 * (pm.f^2 - pm.σ^2)) / (pm.σ^2 - pm.Ñ^2)),
                 Tf = 2*π/pm.f, 
@@ -32,12 +39,12 @@ pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
 
 # other params for setting up the grid
 z_start = pm.Lz - pm.Lzˢ
-y_start = -(pm.Lz - pm.Lzˢ)/pm.Tanα
-Ly = pm.Lyˢ-y_start
-ny = round(Int,Ly/4)
+Sp_extra = ifelse(z_start>0, 250.0, 0.0)
+Ly = pm.Lyˢ+Sp_extra
+ny = round(Int,Ly/pm.dhr)
 slope_end = pm.Lzˢ/pm.Tanα
 
-pm = merge(pm, (;Ly=Ly,ny=ny, slope_end=slope_end))
+pm = merge(pm, (;Ly=Ly,ny=ny, slope_end=slope_end, Sp_extra=Sp_extra))
 
 # if slope is in different spot than usual, need to move the curved part too!
 const zSlopeSameˢ = -pm.Tanαˢ * ySlopeSameˢ
@@ -52,9 +59,9 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 # combining the 2 with heaviside split at ySlopeSame
 @inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
 
-apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
-
-filescalename = apath * "DeltavAllScale.jld2"
+apath = "Analysis/Plots/"
+dpath = "Data/"
+filescalename = dpath * "DeltavAllScale.jld2"
 
 scale_file = jldopen(filescalename, "r+")
 

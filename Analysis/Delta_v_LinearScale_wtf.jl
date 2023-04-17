@@ -14,19 +14,24 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 # curved topo parameters
 const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
 const gausT_width = 180
-const ySlopeSame = 1336.6                           # point where planar and curved corner math up the best    
- 
-apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
+const ySlopeSameˢ = 1332.22                           # point where planar and curved corner math up the best
+
+#apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
+apath = "Plots"
 
 sn = "U250Nfd250Lz100g100"
 
-include("parameters.jl")
-#include("../parameters.jl")
+include("../parameters.jl")
+
 pm = getproperty(SimParams(), Symbol(sn))
 
-pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
+resS = 1.0
+dzr = pm.dz * resS
+dhr = pm.dh * resS
+
+pm = merge(pm, (; dzr=dzr, dhr=dhr, Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
                 Tanα = pm.γ * sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
-                nz = round(Int,pm.Lz/2),
+                nz = round(Int,pm.Lz/2), nx = round(Int, pm.Lx/dhr),
                 m = -π/pm.Lz,
                 l = sqrt(((π/pm.Lz)^2 * (pm.f^2 - pm.σ^2)) / (pm.σ^2 - pm.Ñ^2)),
                 Tf = 2*π/pm.f, 
@@ -34,11 +39,17 @@ pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
 
 # other params for setting up the grid
 z_start = pm.Lz - pm.Lzˢ
-y_start = -(pm.Lz - pm.Lzˢ)/pm.Tanα
-Ly = pm.Lyˢ-y_start
-ny = round(Int,Ly/4)
+Sp_extra = ifelse(z_start>0, 250.0, 0.0)
+Ly = pm.Lyˢ+Sp_extra
+ny = round(Int,Ly/pm.dhr)
+slope_end = pm.Lzˢ/pm.Tanα
 
-pm = merge(pm, (;Ly=Ly,ny=ny))
+pm = merge(pm, (;Ly=Ly,ny=ny, slope_end=slope_end, Sp_extra=Sp_extra))
+
+# if slope is in different spot than usual, need to move the curved part too!
+const zSlopeSameˢ = -pm.Tanαˢ * ySlopeSameˢ
+ySlopeSame = zSlopeSameˢ / -pm.Tanα
+ΔySlopeSame = ySlopeSameˢ - ySlopeSame
 
 @inline heaviside(X) = ifelse(X <0, 0.0, 1.0)
 # exponential gaussian for curved corner
@@ -46,12 +57,12 @@ pm = merge(pm, (;Ly=Ly,ny=ny))
 # planar slope line
 @inline linslope(y) = -pm.Tanα*y
 # combining the 2 with heaviside split at ySlopeSame
-@inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center, gausT_width)) * heaviside(y-ySlopeSame)
+@inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
 
 # how many times were saved?
 zlength = pm.nz
 ylength = 425 # roughly out to y = 1700 (is this enough still??)
-xlength = 38
+xlength = pm.nx
 
 # cutting off top and bottom to avoid boundaries:
 
@@ -127,10 +138,10 @@ for (m, setname) in enumerate(setnames)
     filepath = path_name * name_prefix * ".jld2"
     @info "getting data from: " * setname
 
-    c_timeseries = FieldTimeSeries(filepath, "c")
+    c_timeseries = FieldTimeSeries(filepath, "c");
     xc, yc, zc = nodes(c_timeseries) #CCC
 
-    b_timeseries = FieldTimeSeries(filepath,"b")
+    b_timeseries = FieldTimeSeries(filepath,"b");
     xb, yb, zb = nodes(b_timeseries) #CCC
 
     N_timeseries = FieldTimeSeries(filepath, "N2");
