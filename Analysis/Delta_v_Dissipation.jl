@@ -75,6 +75,10 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 eps_beginAvg = zeros(Lvals)
 # average dissipation over waves 6-10
 eps_endAvg = zeros(Lvals)
+# maximum average dissipation over waves 2-5
+eps_beginMaxAvg = zeros(Lvals)
+# maximum average dissipation over waves 6-10
+eps_endMaxAvg = zeros(Lvals)
 
 for (m, setname) in enumerate(setnames)
 
@@ -112,6 +116,7 @@ for (m, setname) in enumerate(setnames)
         ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
 
         @info "Calculating Global Averages..."
+        e_xyzmax = maximum(ei,dims =(1,2,3))[1,1,1,:]
         e_xavg = mean(ei, dims=1)[1,:,:,:];
 
         Ygrid = reshape(repeat(ye[1:ylength], zlength), ylength, zlength)
@@ -144,23 +149,30 @@ for (m, setname) in enumerate(setnames)
 
         # global value in time
         eps_glob_Wavg_cut = zeros(wav_Avgarr_length);
+        eps_glob_max_Wavg = zeros(wav_Avgarr_length);
 
         for (ki, tk) in enumerate(wave_info.WavePeriods[Wl+1:end-Wl])
             # glo2Wlbal value in time
             Widxs = wave_info.WavePeriods[ki:ki+2*Wl] 
             eps_glob_Wavg_cut[ki] = mean(e_xyzavg_cutoff[Widxs])
+            eps_glob_max_Wavg[ki] = mean(e_xyzmax[Widxs])
+
         end
 
         @info "Averaging over waves 6-10 and 2-5..."
         # you have completed 1 wave by T_Tσs[2]
+        # this is the time index for full array
         Tσ6_idx = wave_info.T_Tσs[7] # completion of 6 waves
         Tσ10_idx = wave_info.T_Tσs[11] # completion of 10 waves
 
         Tσ2_idx = wave_info.T_Tσs[3] # completion of 2 waves
         Tσ5_idx = wave_info.T_Tσs[6]
 
-        eps_avg_Wavg_25Avg_cut = mean(e_xyzavg_cutoff[Tσ2_idx-Wl:Tσ5_idx-Wl])
-        eps_avg_Wavg_610Avg_cut = mean(e_xyzavg_cutoff[Tσ6_idx-Wl:Tσ10_idx-Wl])
+        eps_avg_Wavg_25Avg_cut = mean(e_xyzavg_cutoff[Tσ2_idx:Tσ5_idx])
+        eps_avg_Wavg_610Avg_cut = mean(e_xyzavg_cutoff[Tσ6_idx:Tσ10_idx])
+
+        eps_max_Wavg_25Avg = mean(e_xyzmax[Tσ2_idx:Tσ5_idx])
+        eps_max_Wavg_610Avg = mean(e_xyzmax[Tσ6_idx:Tσ10_idx])
 
         wavetimes = 1:1/Wl:((wav_Avgarr_length+(Wl-1))/Wl)
         
@@ -177,11 +189,27 @@ for (m, setname) in enumerate(setnames)
                 label=@sprintf("<ϵ̄>₂₋₅ = %0.4f × 10⁻⁶", eps_avg_Wavg_25Avg_cut*1e6))
 
         savefig(ep2, apath * "Dissip_Fix_" * setname * ".png")
+     
+        ep3 = plot(wavetimes, eps_glob_max_Wavg, lw = 5, color = :green,
+                label=@sprintf("<ϵₘₐₓ>₆_₁₀= %0.4f × 10⁻⁶", eps_max_Wavg_610Avg*1e6),
+                xlabel = "Tσ", ylabel="ϵ̄ [m²s⁻³]", legend_font = font(16), 
+                guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=10.0mm, 
+                left_margin=10.0mm, right_margin=20.0mm,
+                legend = :bottomleft, size = (1000,800), title = big_title)
+            plot!(wavetimes, eps_glob_max_Wavg, lw = 5, color = :green,
+                label=@sprintf("<ϵₘₐₓ>₂₋₅ = %0.4f × 10⁻⁶", eps_max_Wavg_25Avg*1e6))
+
+        savefig(ep3, apath * "DissipMax_Fix_" * setname * ".png")
 
         # average dissipation over waves 2-5
         eps_beginAvg[m] = eps_avg_Wavg_25Avg_cut
         # average dissipation over waves 6-10
         eps_endAvg[m] = eps_avg_Wavg_610Avg_cut
+
+        # average dissipation over waves 2-5
+        eps_beginMaxAvg[m] = eps_max_Wavg_25Avg
+        # average dissipation over waves 6-10
+        eps_endMaxAvg[m] = eps_max_Wavg_610Avg
     end
 end
 
@@ -193,4 +221,5 @@ filescalename = apath * "DeltavDissip.jld2"
 
 jldsave(filescalename; setnames, 
     eps_beginAvg, eps_endAvg,
+    eps_beginMaxAvg, eps_endMaxAvg,
     δ = δ2)
