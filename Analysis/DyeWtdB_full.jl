@@ -4,6 +4,8 @@ using Statistics
 using Printf
 using Oceananigans
 using CurveFit
+using JLD2
+
 ENV["GKSwstype"] = "nul" # if on remote HPC
 
 path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/"
@@ -21,7 +23,7 @@ global setnames=[]
 for u = 50:50:550
     global setnames = [setnames ; @sprintf("U%dN100Lz100g100", u)]
 end
-for u = [150,350, 450]
+for u = [150,350,450]
     global setnames = [setnames ; @sprintf("U250Nfd%dLz100g100", u)]
 end
 
@@ -106,6 +108,11 @@ for (m, setname) in enumerate(setnames)
 
     b_timeseries = FieldTimeSeries(filepath,"b");
     xb, yb, zb = nodes(b_timeseries) #CCC
+
+    tfin = b_timeseries.times[end]
+    wave10 = pm2.Tσ*10.5
+    if tfin >= wave10
+
     Cg_timeseries = FieldTimeSeries(filepath,"Cg");
 
     tlength  = length(b_timeseries.times)
@@ -129,8 +136,13 @@ for (m, setname) in enumerate(setnames)
     Wl = wave_info.Wl
     (KTracer_denom_Wavg, WTracer_denom_Wavg, c_weighted_bavg_Wavg, c_weighted_b2avg_Wavg) =rollingwaveavg(wave_info, KTracer_denom, WTracer_denom, c_weighted_bavg, c_weighted_b2avg)
 
+    # wave value index in terms of time array
     Tσ6_idx = wave_info.T_Tσs[7]
     Tσ10_idx = wave_info.T_Tσs[11]
+
+    # wave value index in terms of rolling away
+    Tσ6_idxW = 5*Wl-1
+    Tσ10_idxW = 9*Wl-1
 
     @info "Finding the rate of change..."
     Δt = b_timeseries.times[2] - b_timeseries.times[1]
@@ -143,18 +155,18 @@ for (m, setname) in enumerate(setnames)
     Kₜ = ∂ₜb̄2_Wavg ./ KTracer_denom_Wavg[2:end]
 
     @info "Average Values at end..."
-    Wₜ_endAvg[m] = mean(Wₜ[Tσ6_idx-Wl:Tσ10_idx-Wl-1]) 
-    Kₜ_endAvg[m] = mean(Kₜ[Tσ6_idx-Wl:Tσ10_idx-Wl-1])
+    Wₜ_endAvg[m] = mean(Wₜ[Tσ6_idxW:Tσ10_idxW]) 
+    Kₜ_endAvg[m] = mean(Kₜ[Tσ6_idxW:Tσ10_idxW])
 
     big_title = @sprintf("Tracer Weighted Buoyancy, U₀=%0.2f, N=%0.2f×10⁻³, δ=%0.1f", pm2.U₀, 10^3*pm2.Ñ, pm2.U₀/pm2.Ñ)
 
-    bp6 = plot(b_timeseries.times[Wl+2:tlength-Wl]/pm2.Tσ, Kₜ, lw = 5, 
+    bp6 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Kₜ, lw = 5, 
             label=@sprintf("<K>₆_₁₀ = %0.3e", Kₜ_endAvg[m]),
             xticks = false, ylabel="K [m²s⁻³]", legend_font = font(16),
             guidefontsize = 20, titlefont=20, tickfont = 14, left_margin=10.0mm,
             legend = :topleft, size = (1100,800), title = "Centered 2nd Moment Diffusivity")
 
-    bp5 = plot(b_timeseries.times[Wl+2:tlength-Wl]/pm2.Tσ, Wₜ, lw = 5, 
+    bp5 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Wₜ, lw = 5, 
             label=@sprintf("<W>₆_₁₀ =  %0.3e", Wₜ_endAvg[m]),
             xlabel = "Tσ", ylabel="W [ms⁻³]", legend_font = font(16),
             guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=5.0mm, left_margin=10.0mm,
