@@ -28,6 +28,9 @@ thorpe_hmax_tavg = vcat(scale_file["thorpe_hmax_tavg"],scale_file["thorpe_hmax_t
 
 @info "Plotting!"
 
+VaryU = 1:11
+VaryN = 12:25
+
 # varying N or U to change delat value in sim, varying N changes sigma and f respectively as well
 VaryN = 1:11
 VaryU = 12:22

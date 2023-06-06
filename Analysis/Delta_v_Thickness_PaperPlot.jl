@@ -10,11 +10,13 @@ using JLD2
 apath = "Analysis/Plots/"
 dpath = "Data/"
 filescalename = dpath * "DeltavAllScale.jld2"
-
+filescalename_oth = dpath * "DeltavAllScale_oth.jld2"
+dnames = "../SetnamesList.jld2"
 scale_file = jldopen(filescalename, "r+")
-
-setnames = vcat(scale_file["setnames"],scale_file["setnames_oth"])
-δ = vcat(scale_file["δ"],scale_file["δ_oth"])
+scale_file_oth = jldopen(filescalename_oth, "r+")
+dfile = jldopen(dnames, "r+")
+setnames = vcat(scale_file["setnames"],scale_file_oth["setnames_oth"])
+δ = vcat(scale_file["δ"],scale_file_oth["δ_oth"])
 Cheight_havg_tavg =vcat(scale_file["Cheight_havg_tavg"],scale_file["Cheight_havg_tavg_oth"])
 Nheight_havg_tavg =vcat(scale_file["Nheight_havg_tavg"],scale_file["Nheight_havg_tavg_oth"])
 

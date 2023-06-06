@@ -13,31 +13,32 @@ apath = "Analysis/Plots/"
 dpath = "Data/"
 filescalename_ε = dpath * "DeltavDissip.jld2"
 filescalename_Lt = dpath * "DeltavAllScale.jld2"
+filesetnames =  "SetnamesList.jld2"
+
+scale_file_sn = jldopen(filesetnames, "r+")
+δ = scale_file_sn["δs"][1:25]
 
 scale_file_ε = jldopen(filescalename_ε, "r+")
 scale_file_Lt = jldopen(filescalename_Lt, "r+")
 
 setnames = scale_file_ε["setnames"]
-δ = scale_file_ε["δ"]
+
+include("parameters.jl")
+
+Ñ = zeros(length(setnames))
+for (m,setname) in enumerate(setnames)
+    pm = getproperty(SimParams(), Symbol(setname))
+    Ñ[m] = pm.Ñ
+end
+
 eps_beginAvg = scale_file_ε["eps_beginAvg"]
 eps_endAvg = scale_file_ε["eps_endAvg"]
 eps_beginMax = scale_file_ε["eps_beginMaxAvg"]
 eps_endMax = scale_file_ε["eps_endMaxAvg"]
 thorpe_hmax_tavg = scale_file_Lt["thorpe_hmax_tavg"]
-# Thorpe vals did vary N first, switching so same as dissipation
-Lt_corrected = vcat(thorpe_hmax_tavg[12:end], thorpe_hmax_tavg[1:11])
 
-Ñ_U = ones(11) .* (3.5*1e-3)
-Ñ_N = 0.25 ./ δ[12:22]
-Ñ = vcat(Ñ_U, Ñ_N)
 δN = δ.^2 .* Ñ.^3
-LtN = Lt_corrected.^2 .* Ñ.^3
-
-#deleteat!(LtN, 12:13)
-#deleteat!(δN, 12:13)
-#deleteat!(eps_endAvg, 12:13)
-#deleteat!(eps_endMax, 12:13)
-#deleteat!(eps_beginMax, 12:13)
+LtN = thorpe_hmax_tavg.^2 .* Ñ.^3
 
 @info "Find Bestfit Lines for full data"
 (b_εδ,m_εδ) = linear_fit(δN, eps_endAvg)
@@ -48,6 +49,9 @@ LtN = Lt_corrected.^2 .* Ñ.^3
 # varying N or U to change delat value in sim, varying N changes sigma and f respectively as well
 VaryU = 1:11
 VaryN = 12:20
+
+VaryU = 1:11
+VaryN = 12:25
 
 # removing last N and first U val from data
 VaryU2 = 1:10
@@ -75,14 +79,18 @@ LtN_cut = vcat(LtN[VaryU2], LtN[VaryN2])
 
 xlimLt =maximum(LtN)
 xlimd = maximum(δN)
+xmind = minimum(δN)
+xminLt = minimum(LtN)
 ylime = maximum(eps_endAvg)
+ymine = minimum(eps_endAvg)
 
 # simulations where N is varied to change delta
 dp = plot(δN, m_εδ .* δN .+ b_εδ, label =  "", color=:gray30, lw = 4)
-scatter!(δN[VaryN], eps_endAvg[VaryN], label ="Vary N", markersize = 8, color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
+scatter!(δN[VaryN], eps_endAvg[VaryN], label ="Vary N", markersize = 8, 
+    color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
     tickfont = 15, guidefontsize = 20, titlefont = 20, legendfont = 15, title = "", 
     bottom_margin=10mm, right_margin = 10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.2*1e-5), size = (1500, 600), xformatter = :scientific,
+    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.8e-5), size = (1500, 600), xformatter = :scientific,
     xticks = 0:5*1e-4:1e-3)
 # simulations where U is varied to change delta
 scatter!(δN[VaryU], eps_endAvg[VaryU], label ="Vary V₀", markersize = 8, marker=:utriangle, color = :dodgerblue2)
@@ -92,10 +100,10 @@ plot!(δ, -1 .* m_εδ .* δ .- b_εδ, label =  @sprintf("%0.3f δ²N³", m_ε�
         color=:gray30, lw = 4)
 
 lp = plot(LtN, m_εLt .* LtN .+ b_εLt, color=:gray50, lw = 4)
-scatter!(LtN[VaryN], eps_endAvg[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "ε [m²s⁻³]",
+scatter!(LtN[VaryN], eps_endAvg[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨ε⟩ [m²s⁻³]",
     tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
     bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.2*1e-5), size = (1500, 600), xformatter = :scientific,
+    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.8*1e-5), size = (1500, 600), xformatter = :scientific,
     xticks = 0:5*1e-4:1e-3)
 # simulations where U is varied to change delta
 scatter!(LtN[VaryU], eps_endAvg[VaryU],  markersize = 8, marker=:utriangle, color = :dodgerblue2, legend = false)
@@ -132,7 +140,7 @@ plot!(δN_cut, -1 .* m_εδ_cut .* δN_cut .- 5, label =  @sprintf("%0.3f δ²N�
         color=:gray30, lw = 4)
 
 lp = plot(LtN_cut, m_εLt_cut .* LtN_cut .+ b_εLt_cut, color=:gray50, lw = 4)
-scatter!(LtN_cut[VaryN_cut], eps_endAvg_cut[VaryN_cut], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "ε [m²s⁻³]",
+scatter!(LtN_cut[VaryN_cut], eps_endAvg_cut[VaryN_cut], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨ε⟩ [m²s⁻³]",
     tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
     bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
     xlims = (-1e-6, 3.0*1e-4), ylims = (-1e-6, 1.2*1e-5), size = (1500, 600), xformatter = :scientific,
@@ -171,7 +179,7 @@ plot!(δ, -1 .* m_Mεδ .* δ .- 5, label =  @sprintf("%0.3f δ²N³", m_Mεδ),
         color=:gray30, lw = 4)
 
 lp = plot(LtN, m_MεLt .* LtN .+ b_MεLt, color=:gray50, lw = 4)
-scatter!(LtN[VaryN], eps_endMax[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "ε [m²s⁻³]",
+scatter!(LtN[VaryN], eps_endMax[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨εₘₐₓ⟩ [m²s⁻³]",
     tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
     bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
     xlims = (-1e-5, 1.2*1e-3), ylims = (-1e-5, 1.2*1e-3), size = (1500, 600), xformatter = :scientific, yformatter = :scientific,

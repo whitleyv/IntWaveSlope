@@ -11,11 +11,13 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 
 ###########-------- SIMULATION PARAMETERS ----------------#############
  
-apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/Dissipation/"
+#apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/Dissipation/"
+path = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+apath = path * "Analysis/"
 
 sn = "U250N100Lz100g100"
 
-include("parameters.jl")
+include("../parameters.jl")
 pm = getproperty(SimParams(), Symbol(sn))
 
 pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
@@ -26,17 +28,13 @@ pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
                 Tf = 2*π/pm.f, 
                 Tσ = 2*π/pm.σ))
 
-global Us = .05:.05:.55
-global setnames=[]
+        
+filesetnames =  "../SetnamesList.jld2"
 
-# varying velocity
-for u = 50:50:550
-    global setnames = [setnames ; @sprintf("U%dN100Lz100g100", u)]
-end
-# varying statification
-for u = 50:50:550
-    global setnames = [setnames ; @sprintf("U250Nfd%dLz100g100", u)]
-end
+scale_file = jldopen(filesetnames, "r+")
+
+sns = scale_file["setnames"]
+setnames = sns[1:25]
 
 Lvals = length(setnames)
 
@@ -83,11 +81,7 @@ eps_endMaxAvg = zeros(Lvals)
 for (m, setname) in enumerate(setnames)
 
     @info "getting data from: " * setname
-    if m < 12
-        path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU0/"
-    else
-        path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryNetc/"
-    end
+   path_name = path
 
     # need to recalculate parameters each time because N, and wave length will change!
     pm2 = getproperty(SimParams(), Symbol(setname))
@@ -100,7 +94,7 @@ for (m, setname) in enumerate(setnames)
                 Tf = 2*π/pm2.f, 
                 Tσ = 2*π/pm2.σ))
     
-    name_prefix = "vIntWave_" * setname
+    name_prefix = "IntWave_" * setname
     filepath = path_name * name_prefix * ".jld2"
 
     e_timeseries = FieldTimeSeries(filepath, "ϵ");
@@ -132,7 +126,7 @@ for (m, setname) in enumerate(setnames)
         e_xyzavg_cutoff = zeros(tlength)
 
         for i = 1:tlength
-            tbool = e_fvals[:,i] .> 1e-7 # changing up a order to -4 orders less than expected avg for smallest avg
+            tbool = e_fvals[:,i] .> 1e-6 # changing up a order to -4 orders less than expected avg for smallest avg
             if sum(tbool) > 0
                 e_xyzavg_cutoff[i] = mean(e_fvals[tbool, i])
             end
@@ -140,7 +134,7 @@ for (m, setname) in enumerate(setnames)
 
         @info "Computing Rolling Wave Averages..."
         # averages based on true wave times not consistent across N varying sims
-        include("WaveValues.jl")
+        include("../WaveValues.jl")
         wave_info=get_wave_indices(e_timeseries, pm2, tlength)
 
         Wl = wave_info.Wl
@@ -188,7 +182,7 @@ for (m, setname) in enumerate(setnames)
             plot!(wavetimes, eps_glob_Wavg_cut, lw = 5, color = :green,
                 label=@sprintf("<ϵ̄>₂₋₅ = %0.4f × 10⁻⁶", eps_avg_Wavg_25Avg_cut*1e6))
 
-        savefig(ep2, apath * "Dissip_Fix_" * setname * ".png")
+        savefig(ep2, apath * "Dissip_Mean_" * setname * ".png")
      
         ep3 = plot(wavetimes, eps_glob_max_Wavg, lw = 5, color = :green,
                 label=@sprintf("<ϵₘₐₓ>₆_₁₀= %0.4f × 10⁻⁶", eps_max_Wavg_610Avg*1e6),
@@ -199,7 +193,7 @@ for (m, setname) in enumerate(setnames)
             plot!(wavetimes, eps_glob_max_Wavg, lw = 5, color = :green,
                 label=@sprintf("<ϵₘₐₓ>₂₋₅ = %0.4f × 10⁻⁶", eps_max_Wavg_25Avg*1e6))
 
-        savefig(ep3, apath * "DissipMax_Fix_" * setname * ".png")
+        savefig(ep3, apath * "DissipMax_" * setname * ".png")
 
         # average dissipation over waves 2-5
         eps_beginAvg[m] = eps_avg_Wavg_25Avg_cut
@@ -213,13 +207,8 @@ for (m, setname) in enumerate(setnames)
     end
 end
 
-# plot statistics compared to delta values
-δ = (0.05:.05:.55)./pm.Ñ
-δ2 = repeat(δ, 2)
-
 filescalename = apath * "DeltavDissip.jld2"
 
 jldsave(filescalename; setnames, 
     eps_beginAvg, eps_endAvg,
-    eps_beginMaxAvg, eps_endMaxAvg,
-    δ = δ2)
+    eps_beginMaxAvg, eps_endMaxAvg)

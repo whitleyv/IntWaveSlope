@@ -17,7 +17,10 @@ const gausT_width = 180
 const ySlopeSameˢ = 1332.22                           # point where planar and curved corner math up the best
 
 #apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
-apath = "Plots"
+#apath = "Plots"
+
+path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+apath = path_name * "Analysis/"
 
 sn = "U250Nfd250Lz100g100"
 
@@ -77,16 +80,16 @@ y_en = round(Int, 2500/4) # just choosing this y value to include most of dye ex
 zlength_sm = length(z_en:z_st)
 ylength_sm = length(y_st:y_en)
 
-#### ------------Each Simulation and Array Info----------####
-global setnames=[]
-for u = 50:50:550
-    global setnames = [setnames ; @sprintf("U250Nfd%dLz100g100", u)]
-end
-for u = 50:50:550
-    global setnames = [setnames ; @sprintf("U%dN100Lz100g100", u)]
-end
+#### ------------Each Simulation and Array Info----------###
 @info "Setting up Save Arrays "
 
+filesetnames =  "../SetnamesList.jld2"
+
+scale_file = jldopen(filesetnames, "r+")
+
+sns = scale_file["setnames"]
+
+setnames = sns[1:25]
 Lvals = length(setnames)
 
 ################################ INTRUSIONS
@@ -114,7 +117,6 @@ cond_gt1(y) = y > 1 # find next overturn
 cond_gt4(y) = y > 4 # cutoff for overturns
 isemp(A) = length(A) < 1
 isNemp(A) = length(A) > 1
-isnada(val) = val == nothing
 thresh(z) = z>10^(-6)
 
 start_time = time_ns()
@@ -127,18 +129,12 @@ rolWidz = 3
 numRes = 25
 
 for (m, setname) in enumerate(setnames)
-
-    if m > 11
-        path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU0/"
-    else
-        path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryNetc/"
-    end
     
     name_prefix = "vIntWave_" * setname
     filepath = path_name * name_prefix * ".jld2"
     @info "getting data from: " * setname
 
-    c_timeseries = FieldTimeSeries(filepath, "c");
+    c_timeseries = FieldTimeSeries(filepath, "Cs");
     xc, yc, zc = nodes(c_timeseries) #CCC
 
     b_timeseries = FieldTimeSeries(filepath,"b");
@@ -162,7 +158,7 @@ for (m, setname) in enumerate(setnames)
                 Tσ = 2*π/pm2.σ))
 
     @info "Calculating Wave Indices..."
-    include("WaveValues.jl")
+    include("../WaveValues.jl")
     wave_info=get_wave_indices(N_timeseries, pm2, tlength)
 
     # gather the last 4 waves in a usual sim
@@ -467,15 +463,11 @@ for (m, setname) in enumerate(setnames)
     @info "Statistics Finished for dataset $m/$Lvals"
 end
 
-
 # plot statistics compared to delta values
-δ = (0.05:.05:.55)./pm.Ñ
-δ2 = repeat(δ, 2)
-
 filescalename = apath * "DeltavAllScale.jld2"
 
 jldsave(filescalename; setnames, 
     thorpe_havg_tavg, thorpe_hmax_tavg, 
     Cheight_havg_tavg, Cheight_hrms_trms,
     Nheight_havg_tavg, Nheight_hrms_trms,
-    δ = δ2)
+   )
