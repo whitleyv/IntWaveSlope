@@ -3,16 +3,18 @@ using Oceananigans
 using Printf
 
 path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU0/"
+path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+
 setname = "U250N100Lz100g100"
 
 @info "getting data from: " * setname
 
-name_prefix = "vIntWave_" * setname
+name_prefix = "IntWave_" * setname
 filepath = path_name * name_prefix * ".jld2"
 
 v_timeseries = FieldTimeSeries(filepath, "v");
 b_timeseries = FieldTimeSeries(filepath, "b");
-c_timeseries = FieldTimeSeries(filepath, "c");
+c_timeseries = FieldTimeSeries(filepath, "Cs");
 
 xc, yc, zc = nodes(c_timeseries) #CCC
 xv, yv, zv = nodes(v_timeseries) #CFC
@@ -37,7 +39,6 @@ const ySlopeSame = 1336.6                           # point where planar and cur
 
 ΔySlopeSame = 0
 
-
 @inline heaviside(X) = ifelse(X < 0, 0., 1.) # heaviside returns 1 if x >= 0
 # exponential gaussian for curved corner
 @inline expcurve(y, ystar, smo) = -pm.Lz + pm.Lz * exp( - (y - ystar)^2 / (2*smo^2))
@@ -54,21 +55,24 @@ interest_idx3 = [round(Int,(pm.Tσ*3.0)/600), round(Int,(pm.Tσ*3.2)/600), round
 interest_idx4 = [round(Int,(pm.Tσ*3.5)/600), round(Int,(pm.Tσ*3.7)/600), round(Int,(pm.Tσ*3.9)/600)]
 
 interest_idxb = [interest_idx3, interest_idx4]
-tims = interest_idx.* 600.0
-wavs = tims./ pm.Tσ
+tims = interest_idxb.* 600.0
+wavs = tims ./ pm.Tσ
+
+wavsa = interest_idx1 .* (600/pm.Tσ)
 
 # figure of singular initial progression # resolution (x,y)
-f1 = Figure(resolution = (1300, 400), fontsize=26)
-ga = f1[1, 1] = GridLayout()
-gab1 = f1[:, 2] = GridLayout()
-gab2 = f1[:, 3] = GridLayout()        
+
+f1 = Figure(resolution = (1800, 400), fontsize=26)
+ga = f1[1:2, 1] = GridLayout()
+gab1 = f1[1, 2] = GridLayout()
+gab2 = f1[2, 2] = GridLayout()        
 
 axv1 = Axis(ga[1, 1])
 axv2 = Axis(ga[1, 2])
 axc2 = Axis(ga[2, 2])
 axv3 = Axis(ga[1, 3])
 axc3 = Axis(ga[2, 3])
-axc1 = Axis(g[2, 1], ylabel = "z [m]", xlabel = "y [m]")
+axc1 = Axis(ga[2, 1], ylabel = "z [m]", xlabel = "y [m]")
 
 axc1.xticks = 500:1000:1500
 axc2.xticks = 500:1000:1500
@@ -100,7 +104,7 @@ for (p,j) in enumerate(interest_idx1)
     b = interior(b_timeseries[j], xlocat, :, :)
     c = log10.(clamp.(interior(c_timeseries[j], xlocat, :, :),1e-8,1))
 
-    phaselabel = time_pre * @sprintf("%0.1f", wavs[i][p]) * time_post
+    phaselabel = time_pre * @sprintf("%0.1f", wavsa[p]) * time_post
 
     # create the heatmaps
     global hmv = heatmap!(axv[p], yv, zv, v, colormap = :balance, colorrange = (-pm.U₀, pm.U₀))
@@ -114,7 +118,6 @@ for (p,j) in enumerate(interest_idx1)
     lines!(axc[p], yc, land, color=:black, lw = 4)
 end
 
-
 # get rid of the inner values
 hidedecorations!(axv2)
 hidedecorations!(axv3)
@@ -122,8 +125,8 @@ hidexdecorations!(axv1)
 hideydecorations!(axc2)
 hideydecorations!(axc3)
 
-colgap!(g, 15)
-rowgap!(g, 5)
+colgap!(ga, 15)
+rowgap!(ga, 5)
 
 # create colorbars the size of the whole data set
 cb1 = Colorbar(gab1[1,1], hmv, ticks = (-0.2:.1:0.2), size =35, label = "v [ms⁻¹]")
@@ -131,8 +134,8 @@ cb2 = Colorbar(gab2[1,1], hmc, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻�
         size = 35, label = "Tracer Concentration")
 
 # making colorbars take up less space
-colsize!(f.layout, 2, Relative(0.05))
-colsize!(f.layout, 3, Relative(0.05))    
+colsize!(f1.layout, 2, Relative(0.05))
+#colsize!(f1.layout, 3, Relative(0.05))    
 
 savename = "waveseries_split1_" * setname
 apath  = path_name * "Analysis/"
@@ -140,10 +143,10 @@ apath  = path_name * "Analysis/"
 save(apath * savename * ".png", f1)
 
  
-# fugure of full progression
+# figure of full progression
 f = Figure(resolution = (1600, 700), fontsize=26)
-gc = f[3, 1] = GridLayout()
-gd = f[4, 1] = GridLayout()
+gc = f[1, 1] = GridLayout()
+gd = f[2, 1] = GridLayout()
 gplots = [gc, gd]
 
 gcb1 = f[:, 2] = GridLayout()
@@ -200,7 +203,7 @@ for (i,g) in enumerate(gplots)
     time_post = " Tσ"
 
     # for each time
-    for (p,j) in enumerate(interest_idx[i])
+    for (p,j) in enumerate(interest_idxb[i])
 
         # get the data
         v = interior(v_timeseries[j], xlocat, :, :)
