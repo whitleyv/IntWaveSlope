@@ -6,9 +6,11 @@ using Oceananigans
 using CurveFit
 using JLD2
 
+DeltavCwtdB_p3.jld2
+
 ENV["GKSwstype"] = "nul" # if on remote HPC
 
-path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/"
+path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
 apath = path_name * "Analysis/"
 
 include("parameters.jl")
@@ -18,31 +20,36 @@ zlength = 250
 ylength = 1000 # roughly out to y = 4000 (this should be enough, at least for .2 ??)
 xlength = 38
 
-global Us = .05:.05:.55
-global setnames=[]
-for u = 50:50:550
-    global setnames = [setnames ; @sprintf("U%dN100Lz100g100", u)]
-end
-for u = [150,350,450]
-    global setnames = [setnames ; @sprintf("U250Nfd%dLz100g100", u)]
-end
+const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
+const gausT_width = 180
+const ySlopeSameˢ = 1332.22                           # point where planar and curved corner math up the best
 
+filesetnames =  "../SetnamesList.jld2"
+
+scale_file = jldopen(filesetnames, "r+")
+
+sns = scale_file["setnames"]
+# havent run all these extra ones
+setnames = sns[1:25]
 Lvals = length(setnames)
 Kₜ_endAvg = zeros(Lvals)
 Wₜ_endAvg = zeros(Lvals)
+Kₜ_endWAvg = zeros(Lvals)
+Wₜ_endWAvg = zeros(Lvals)
 δ = zeros(Lvals)
 Ñn = zeros(Lvals)
 
-function calculate_tracer_weight(CGi, Bi, ∇b_mg², sqt_∇b_mg², tlength)
+function calculate_tracer_weight(CGi, Bi, ∇b_mg², sqt_∇b_mg², tlength, boolZ_perm)
     @info "Calculating Denominator of tracer wtd average..."
+    # ∫ c dV
     csum = sum(CGi, dims=(1,2,3))[1,1,1,:];
 
     @info "Calculating first moment..."
-    # volume integral of dye * buoyancy
+    # ∫ cb dV
     cb = CGi .* Bi;
     cbsum = sum(cb, dims=(1,2,3))[1,1,1,:];
 
-    # ratio of int cb dV / int c dV
+    # b̄ =  ∫ cb dV / ∫ c dV
     c_weighted_bavg = cbsum ./ csum;
 
     @info "Calculating second moment..."
@@ -54,9 +61,27 @@ function calculate_tracer_weight(CGi, Bi, ∇b_mg², sqt_∇b_mg², tlength)
 
     cb2sum = sum(b2.^2 .* CGi, dims = (1,2,3))[1,1,1,:];
 
+    # b̄² = ∫ (b - b̄)² c dV / ∫ c dV 
     c_weighted_b2avg = cb2sum ./ csum;
 
+    @info "Slope Boolean..."
+    # getting rid of dye values taht we had to cut from gradient
+    CGi_cut = CGi[2:end, 2:end, 2:end, :]
+    CGi_cut_noslope = CGi_cut[boolZ_perm,:]
+
+    # ∫ c dV with only cut off values
+    csum_noslope = sum(CGi_cut_noslope, dims=1)[1,:];
+    
+    @info "Calculating Denoms... "
+
+    # 2<|∇b|²>  = 2 ∫|∇b|²c dV / ∫ c dV
+    KTracer_denom = 2 .* sum(∇b_mg²[boolZ_perm,:].*CGi_cut_noslope, dims =1)[1,:] ./ csum_noslope;
+    # 2<|∇b|>  = 2 ∫|∇b|c dV / ∫ c dV
+    WTracer_denom = 2 .* sum(sqt_∇b_mg²[boolZ_perm,:].*CGi_cut_noslope, dims =1)[1,:] ./ csum_noslope;
+
+    # 2<|∇b|²>  = 2 ∫|∇b|²c dV / ∫ c dV
     KTracer_denom = 2 .* sum(∇b_mg² .* CGi[2:end, 2:end, 2:end, :], dims = (1,2,3))[1,1,1,:] ./ csum;
+    # 2<|∇b|>  = 2 ∫|∇b|c dV / ∫ c dV
     WTracer_denom = 2 .* sum(sqt_∇b_mg² .* CGi[2:end, 2:end, 2:end, :], dims = (1,2,3))[1,1,1,:] ./ csum;
 
     return c_weighted_b2avg, c_weighted_bavg, KTracer_denom, WTracer_denom
@@ -102,6 +127,18 @@ for (m, setname) in enumerate(setnames)
     δ[m] = pm2.U₀/pm2.Ñ
     Ñn[m] = pm2.Ñ
 
+    zSlopeSameˢ = -pm2.Tanαˢ * ySlopeSameˢ
+    ySlopeSame = zSlopeSameˢ / -pm2.Tanα
+    ΔySlopeSame = ySlopeSameˢ - ySlopeSame
+    
+    @inline heaviside(X) = ifelse(X <0, 0.0, 1.0)
+    # exponential gaussian for curved corner
+    @inline expcurve(y, ystar, smo) = -pm2.Lzˢ + pm2.Lzˢ * exp(-(y-ystar)^2/(2*smo^2))
+    # planar slope line
+    @inline linslope(y) = -pm2.Tanα*y
+    # combining the 2 with heaviside split at ySlopeSame
+    @inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
+
     name_prefix = "IntWave_" * setname
     filepath = path_name * name_prefix * ".jld2"
     @info "getting data from: " * setname
@@ -109,80 +146,136 @@ for (m, setname) in enumerate(setnames)
     b_timeseries = FieldTimeSeries(filepath,"b");
     xb, yb, zb = nodes(b_timeseries) #CCC
 
+
+    YXgrid = reshape(repeat(yb[2:ylength], (zlength-1)*(xlength-1)), ylength-1, zlength-1, xlength-1)
+    SlopeGrid = curvedslope.(YXgrid)
+    boolZYX = (SlopeGrid .+ 4) .<= zb[2:zlength]' # all the values greater than slope
+    boolZ_perm = permutedims(boolZYX, [3, 1,2])
+
+
     tfin = b_timeseries.times[end]
     wave10 = pm2.Tσ*10.5
     if tfin >= wave10
 
-    Cg_timeseries = FieldTimeSeries(filepath,"Cg");
+        Cg_timeseries = FieldTimeSeries(filepath,"Cg");
+        dBdz_timeseries = FieldTimeSeries(filepath, "N2");
 
-    tlength  = length(b_timeseries.times)
-    CGi = interior(Cg_timeseries)[1:xlength, 1:ylength, 1:zlength,:];
-    Bi = interior(b_timeseries)[1:xlength, 1:ylength, 1:zlength,:];
+        tlength  = length(b_timeseries.times)
+        CGi = interior(Cg_timeseries)[1:xlength, 1:ylength, 1:zlength,:];
+        Bi = interior(b_timeseries)[1:xlength, 1:ylength, 1:zlength,:];
+        dBdzi = interior(dBdz_timeseries)[1:xlength, 1:ylength, 1:zlength,:];
 
-    @info "Calculating buoyancy gradient averaged..."
-    ∂xb = Bi[1:end-1,2:end,2:end,:] .- Bi[2:end,2:end,2:end,:];
-    ∂yb = Bi[2:end,1:end-1,2:end,:] .- Bi[2:end,2:end,2:end,:];
-    ∂zb = Bi[2:end,2:end,1:end-1,:] .- Bi[2:end,2:end,2:end,:];
+        Δx = 1/(xb[1] - xb[2])
+        Δy = 1/(yb[1] - yb[2])
+        Δz = 1/(zb[1] - zb[2])
 
-    ∇b_mg² = ∂xb.^2 .+ ∂yb.^2 .+ ∂zb.^2
-    sqt_∇b_mg² = sqrt.(∇b_mg²)
+        @info "Calculating buoyancy gradient averaged..."
+        ∂xb = Δx .* (Bi[1:end-1,2:end,2:end,:] .- Bi[2:end,2:end,2:end,:]);
+        ∂yb = Δy .* (Bi[2:end,1:end-1,2:end,:] .- Bi[2:end,2:end,2:end,:]);
+        ∂zb = 0.5 .* (dBdzi[2:end,2:end,1:end-1,:] .+ Bi[2:end,2:end,2:end,:]);
 
-    (c_weighted_b2avg, c_weighted_bavg, KTracer_denom, WTracer_denom) = calculate_tracer_weight(CGi, Bi, ∇b_mg², sqt_∇b_mg², tlength)
+        ∇b_mg² = ∂xb.^2 .+ ∂yb.^2 .+ ∂zb.^2
+        sqt_∇b_mg² = sqrt.(∇b_mg²)
 
-    @info "Wave Averaging..."
+        (c_weighted_b2avg, c_weighted_bavg, KTracer_denom, WTracer_denom) = calculate_tracer_weight(CGi, Bi, 
+                                                ∇b_mg², sqt_∇b_mg², tlength, boolZ_perm)
 
-    include("WaveValues.jl")
-    wave_info=get_wave_indices(b_timeseries, pm2, tlength)
-    Wl = wave_info.Wl
-    (KTracer_denom_Wavg, WTracer_denom_Wavg, c_weighted_bavg_Wavg, c_weighted_b2avg_Wavg) =rollingwaveavg(wave_info, KTracer_denom, WTracer_denom, c_weighted_bavg, c_weighted_b2avg)
+        @info "Calculating instantaneous K/W..."
+        Δt = b_timeseries.times[2:end] - b_timeseries.times[1:end-1]
+        # ∂ₜb̄
+        ∂ₜb̄ = (c_weighted_bavg[2:end] .- c_weighted_bavg[1:end-1])./Δt
+        # ∂ₜ<(b-b̄)²> 
+        ∂ₜb̄2 = (c_weighted_b2avg[2:end] .- c_weighted_b2avg[1:end-1])./Δt
+        # Wₜ = 0.5 ∂ₜb̄ / <|∇b|> = ∂ₜ(c_weighted_bavg) / WTracer_denom
+        Wₜ = ∂ₜb̄ ./ WTracer_denom[2:end] 
+        # Κₜ = 0.5 ∂ₜ<(b-b̄)²> / <|∇b|²> = ∂ₜ(c_weighted_b2avg) / KTracer_denom
+        Kₜ = ∂ₜb̄2 ./ KTracer_denom[2:end]
 
-    # wave value index in terms of time array
-    Tσ6_idx = wave_info.T_Tσs[7]
-    Tσ10_idx = wave_info.T_Tσs[11]
+        @info "Wave Averaging..."
 
-    # wave value index in terms of rolling away
-    Tσ6_idxW = 5*Wl-1
-    Tσ10_idxW = 9*Wl-1
+        include("WaveValues.jl")
+        wave_info=get_wave_indices(b_timeseries, pm2, tlength)
+        Wl = wave_info.Wl
 
-    @info "Finding the rate of change..."
-    Δt = b_timeseries.times[2] - b_timeseries.times[1]
+        # wave value index in terms of time array
+        Tσ6_idx = wave_info.T_Tσs[7]
+        Tσ11_idx = wave_info.WavePeriods[11*Wl] - 1
 
-    ∂ₜb̄_Wavg = (c_weighted_bavg_Wavg[2:end] .- c_weighted_bavg_Wavg[1:end-1])./Δt
-    ∂ₜb̄2_Wavg = (c_weighted_b2avg_Wavg[2:end] .- c_weighted_b2avg_Wavg[1:end-1])./Δt
+        Wₜ_endAvg = mean(Wₜ[Tσ6_idx:Tσ11_idx]) 
+        Kₜ_endAvg = mean(Kₜ[Tσ6_idx:Tσ11_idx])
 
-    @info "Determining the diffusivity/ velocity..."
-    Wₜ = ∂ₜb̄_Wavg ./ WTracer_denom_Wavg[2:end] # average in time first to get one value like linear scaling in slope?
-    Kₜ = ∂ₜb̄2_Wavg ./ KTracer_denom_Wavg[2:end]
+        (KTracer_denom_Wavg, WTracer_denom_Wavg, c_weighted_bavg_Wavg, c_weighted_b2avg_Wavg) =rollingwaveavg(wave_info, KTracer_denom, WTracer_denom, c_weighted_bavg, c_weighted_b2avg)
 
-    @info "Average Values at end..."
-    Wₜ_endAvg[m] = mean(Wₜ[Tσ6_idxW:Tσ10_idxW]) 
-    Kₜ_endAvg[m] = mean(Kₜ[Tσ6_idxW:Tσ10_idxW])
+        # wave value index in terms of rolling away
+        Tσ6_idxW = 5*Wl-1
+        Tσ10_idxW = 9*Wl-1
 
-    big_title = @sprintf("Tracer Weighted Buoyancy, U₀=%0.2f, N=%0.2f×10⁻³, δ=%0.1f", pm2.U₀, 10^3*pm2.Ñ, pm2.U₀/pm2.Ñ)
+        @info "Finding the rate of change..."
+        Δt = b_timeseries.times[2] - b_timeseries.times[1]
 
-    bp6 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Kₜ, lw = 5, 
-            label=@sprintf("<K>₆_₁₀ = %0.3e", Kₜ_endAvg[m]),
-            xticks = false, ylabel="K [m²s⁻³]", legend_font = font(16),
-            guidefontsize = 20, titlefont=20, tickfont = 14, left_margin=10.0mm,
-            legend = :topleft, size = (1100,800), title = "Centered 2nd Moment Diffusivity")
+        ∂ₜb̄_Wavg = (c_weighted_bavg_Wavg[2:end] .- c_weighted_bavg_Wavg[1:end-1])./Δt
+        ∂ₜb̄2_Wavg = (c_weighted_b2avg_Wavg[2:end] .- c_weighted_b2avg_Wavg[1:end-1])./Δt
 
-    bp5 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Wₜ, lw = 5, 
-            label=@sprintf("<W>₆_₁₀ =  %0.3e", Wₜ_endAvg[m]),
-            xlabel = "Tσ", ylabel="W [ms⁻³]", legend_font = font(16),
-            guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=5.0mm, left_margin=10.0mm,
-            legend = :topleft, size = (1100,800), title = "1st Moment Diapycnal Velocity")
+        @info "Determining the diffusivity/ velocity..."
+        Wₜ_Wavg = ∂ₜb̄_Wavg ./ WTracer_denom_Wavg[2:end] # average in time first to get one value like linear scaling in slope?
+        Kₜ_Wavg = ∂ₜb̄2_Wavg ./ KTracer_denom_Wavg[2:end]
 
-    bplots = plot(bp5, bp6, layout= (2,1))
+        @info "Average Values at end..."
+        Wₜ_endWAvg[m] = mean(Wₜ_Wavg[Tσ6_idxW:Tσ10_idxW]) 
+        Kₜ_endWAvg[m] = mean(Kₜ_Wavg[Tσ6_idxW:Tσ10_idxW])
 
-    yy = 1:3
-    BigT = Plots.scatter(yy, marker=0, markeralpha=0, annotations=(2, yy[2],
-            Plots.text(big_title, 20)), axis=nothing, grid=false, leg=false,
-            foreground_color_subplot=colorant"white")
-    
-    fin = Plots.plot(BigT, bplots, layout=grid(2, 1, heights=[0.05,0.95]))
+        @info "Plots..."
 
-    savename = "cWtdB_KWonly_" * setname
-    savefig(apath * savename * ".png")
+        big_title = @sprintf("Tracer Weighted Buoyancy, U₀=%0.2f, N=%0.2f×10⁻³, δ=%0.1f", pm2.U₀, 10^3*pm2.Ñ, pm2.U₀/pm2.Ñ)
+
+        bp1 = plot(b_timeseries.times[2:end]/pm2.Tσ, Kₜ, lw = 5, 
+                label=@sprintf("<K>₆_₁₀ = %0.3e", Kₜ_endAvg[m]),
+                xticks = false, ylabel="K [m²s⁻³]", legend_font = font(16),
+                guidefontsize = 20, titlefont=20, tickfont = 14, left_margin=10.0mm,
+                legend = :topleft, size = (1100,800), title = "Centered 2nd Moment Diffusivity")
+
+        bp2 = plot(b_timeseries.times[2:end]/pm2.Tσ, Wₜ, lw = 5, 
+                label=@sprintf("<W>₆_₁₀ =  %0.3e", Wₜ_endAvg[m]),
+                xlabel = "Tσ", ylabel="W [ms⁻³]", legend_font = font(16),
+                guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=5.0mm, left_margin=10.0mm,
+                legend = :topleft, size = (1100,800), title = "1st Moment Diapycnal Velocity")
+
+        b1plots = plot(bp1, bp2, layout= (2,1))
+
+        yy = 1:3
+        BigT = Plots.scatter(yy, marker=0, markeralpha=0, annotations=(2, yy[2],
+                Plots.text(big_title, 20)), axis=nothing, grid=false, leg=false,
+                foreground_color_subplot=colorant"white")
+        
+        fin = Plots.plot(BigT, b1plots, layout=grid(2, 1, heights=[0.05,0.95]))
+
+        savename = "cWtdB_KWinst_" * setname
+        savefig(apath * savename * ".png")
+
+        bp6 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Kₜ_Wavg, lw = 5, 
+                label=@sprintf("<K>₆_₁₀ = %0.3e", Kₜ_endWAvg[m]),
+                xticks = false, ylabel="K [m²s⁻³]", legend_font = font(16),
+                guidefontsize = 20, titlefont=20, tickfont = 14, left_margin=10.0mm,
+                legend = :topleft, size = (1100,800), title = "Centered 2nd Moment Diffusivity")
+
+        bp5 = plot(b_timeseries.times[wave_info.WavePeriods[Wl+2:end-Wl]]/pm2.Tσ, Wₜ_Wavg, lw = 5, 
+                label=@sprintf("<W>₆_₁₀ =  %0.3e", Wₜ_endWAvg[m]),
+                xlabel = "Tσ", ylabel="W [ms⁻³]", legend_font = font(16),
+                guidefontsize = 20, titlefont=20, tickfont = 14, bottom_margin=5.0mm, left_margin=10.0mm,
+                legend = :topleft, size = (1100,800), title = "1st Moment Diapycnal Velocity")
+
+        bplots = plot(bp6, bp5, layout= (2,1))
+
+        yy = 1:3
+        BigT = Plots.scatter(yy, marker=0, markeralpha=0, annotations=(2, yy[2],
+                Plots.text(big_title, 20)), axis=nothing, grid=false, leg=false,
+                foreground_color_subplot=colorant"white")
+        
+        fin = Plots.plot(BigT, bplots, layout=grid(2, 1, heights=[0.05,0.95]))
+
+        savename = "cWtdB_KWwavg_" * setname
+        savefig(apath * savename * ".png")
+    end
 
 end
 
@@ -190,5 +283,6 @@ filescalename = apath * "DeltavCwtdB.jld2"
 
 jldsave(filescalename; setnames, 
             Kₜ_endAvg, Wₜ_endAvg,
+            Kₜ_endWAvg, Wₜ_endWAvg,
             δ, Ñn)
 
