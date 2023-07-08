@@ -4,9 +4,9 @@ using Statistics
 using Printf
 using Oceananigans
 using CurveFit
-using ArgParse
 using JLD2
- 
+using ArgParse
+
 ENV["GKSwstype"] = "nul" # if on remote HPC
 
 ###########-------- SIMULATION PARAMETERS ----------------#############
@@ -14,9 +14,21 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 path = "/glade/scratch/whitleyv/NewAdvection/Parameters/Res/"
 apath = path * "Analysis/"
 
-sn = "U250N100Lz100g100"
+function parse_commandline()
+    s = ArgParseSettings()
+    @add_arg_table s begin
+        "paramset"
+            help = "sets which parameters to use"
+            default = "U100N100Lz100g100"
+    end
+    return parse_args(s)
+end
 
-include("../parameters.jl")
+args=parse_commandline()
+
+sn = args["paramset"]
+
+include("parameters.jl")
 pm = getproperty(SimParams(), Symbol(sn))
 
 pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
@@ -39,12 +51,6 @@ const ySlopeSameˢ = 1332.22                           # point where planar and 
 # combining the 2 with heaviside split at ySlopeSame
 @inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center, gausT_width)) * heaviside(y-ySlopeSameˢ)
 
-####### DISSIPATION #########
-
-nz = round(Int,pm.Lz/2),
-
-YL_ep = 880*4
-ylength_ep = round(Int, YL_ep/Δy)
 
 # maximum average dissipation over waves 6-10
 Δhoriz = [4,4,8,6,3,6,7,3,3.2]
@@ -54,12 +60,12 @@ resSh = Δhoriz ./ 4
 resSz = Δvert ./ 2
 
 Lvals = length(Δhoriz)
-resnames = []
+global rnames = []
 for idx in 1:Lvals
-    resnames = vcat(resnames, @sprintf("_Rz%0.0fRh%0.0f", resSz[idx]*100, resSh[idx]*100))
+    global rnames = vcat(rnames, @sprintf("_Rz%0.0fRh%0.0f", resSz[idx]*100, resSh[idx]*100))
 end
 
-resnames = sn .* resnames
+resnames = sn .* rnames
 
 # data sets
 eps_endMaxAvg = zeros(Lvals)
@@ -95,7 +101,7 @@ for (m, resname) in enumerate(resnames)
 
     zlength = round(Int, pm.Lz/Δz)
     xlength = round(Int, pm.Lx/Δh)
-    ylength = round(Int, pm.Ly/Δh)
+    ylength = round(Int, pm.Lyˢ/Δh)
 
     @info "Dissip..."
     YL_ep = 880*4
@@ -108,15 +114,15 @@ for (m, resname) in enumerate(resnames)
 
     ei = interior(e_timeseries)[:,1:ylength_ep,:,:];
 
-    YXgrid = reshape(repeat(yb[2:ylength_ep], zlength*xlength), ylength_ep, zlength, xlength)
+    YXgrid = reshape(repeat(ye[1:ylength_ep], zlength*xlength), ylength_ep, zlength, xlength)
     SlopeGrid = curvedslope.(YXgrid)
-    boolZYX = (SlopeGrid .+ (2*Δz)) .<= zb[2:zlength]' # all the values greater than slope
+    boolZYX = (SlopeGrid .+ (2*Δz)) .<= ze[1:zlength]' # all the values greater than slope
     boolZ_perm = permutedims(boolZYX, [3, 1,2])
 
     # above slope values at each time step
     e_fluidvals = ei[boolZ_perm,:]
     e_xyzmax = maximum(e_fluidvals,dims =1)[1,:]
-
+    tlength = length(e_timeseries.times)
 
     e_xyzavg_cutoff = zeros(tlength)
 
@@ -127,10 +133,8 @@ for (m, resname) in enumerate(resnames)
         end
     end
 
-    tlength = length(e_timeseries.times)
-
     @info "Computing Rolling Wave Averages..." 
-    include("../WaveValues.jl")
+    include("WaveValues.jl")
     wave_info=get_wave_indices(e_timeseries, pm, tlength)
     Wl = wave_info.Wl
 
@@ -206,11 +210,11 @@ for (m, resname) in enumerate(resnames)
         end
 
         Δc = cmi[:,1:end-1]-cmi[:,2:end]
-        dcdz = Δc /-Δz
+        dcdz = Δc ./-Δz
         # finding all "roots"
         for (yi, y_md) in enumerate(y_st:y_en)
             roots = []
-            for k = 2:size(dcdz)[2]-Δz
+            for k = 2:size(dcdz)[2]-2
                 if dcdz[yi,k] <= 0 && dcdz[yi,k+1] >0
                     roots = [roots;k]
                 end
@@ -350,7 +354,7 @@ for (m, resname) in enumerate(resnames)
         Lt_hmax[i] = isemp(Lt_time_i) ? 0 : maximum(Lt_time_i)
     end
 
-    non0_idx = findall(cond_gt0, Lt_havg[wave_info.T_Tσs[3]:end]) .+ wave_info.T_Tσs[3] .- 1
+    non0_idx = findall(cond_gt0, Lt_hmax[wave_info.T_Tσs[3]:end]) .+ wave_info.T_Tσs[3] .- 1
     # averaging in time to get one value per delta
     # only averaging over past the 3rd wave
     thorpe_hmax_tavg[m] = isemp(non0_idx) ? 0 : mean(Lt_hmax[non0_idx])
@@ -360,10 +364,11 @@ end
 Ozmidov = sqrt.(eps_endAvg./pm.Ñ^3)
 
 
-filescalename = apath * "ConcergenceAnalysis.jld2"
+filescalename = apath * sn * "_ConcergenceAnalysis.jld2"
 
 jldsave(filescalename; resnames, 
 eps_endMaxAvg, eps_endAvg,
 thorpe_hmax_tavg, Cheight_havg_tavg, 
 Ozmidov, Δvert, Δhoriz)
+
 
