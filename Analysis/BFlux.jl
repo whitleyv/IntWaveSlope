@@ -117,7 +117,7 @@ ŵ_Ph = ŵ[:,:,:,end5waves];
 b_Phavg = mean(b_Ph, dims = 5)[:,:,:,:,1];
 v_Phavg = mean(v_Ph, dims = 5)[:,:,:,:,1];
 v̂_Phavg = mean(v̂_Ph, dims = 5)[:,:,:,:,1];
-
+w_Phavg = mean(ŵ_Ph, dims = 5)[:,:,:,:,1];
 @info "Wave Averaging..."
 
 # x, y, z

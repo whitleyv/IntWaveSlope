@@ -41,6 +41,8 @@ v̂_Phavg  = scale_file1[skeys[11]]
 v̂_Wavg  = scale_file1[skeys[12]]
 b_Phavg  = scale_file1[skeys[13]]
 
+ŵ_Phavg  = whatfile["ŵ_Phavg_xavg"]
+
 #e_Phavg_xavg = eps_file["e_Phavg_xavg"]
 yb=scale_file1[skeys[14]]
 zb=scale_file1[skeys[15]]
@@ -248,6 +250,7 @@ apath  = "Analysis/Plots/"
 save(apath * savename * ".png", f1)
 
 """ Phase averaging """
+v̂_Phavg_xavg = mean(v̂_Phavg, dims = 1)[1,:,:,:];
 v_Phavg_xavg = mean(v_Phavg, dims = 1)[1,:,:,:];
 vb_WpertPhavg_xavg = mean(vb_WpertPhavg, dims = 1)[1,:,:,:];
 wb_WpertPhavg_xavg = mean(wb_WpertPhavg, dims = 1)[1,:,:,:];
@@ -268,15 +271,17 @@ vb_WpertPhavg_xavg_dy = ((vb_WpertPhavg_xavg[1:end-1,2:end,:] .- wb_WpertPhavg_x
 (_,_,Lw) = size(b_Phavg_xavg)
 tindxs = vcat(vcat(1:2:7, 8),9:2:13)
 tindxs = vcat(vcat(1:3:10, 11),12:3:Lw)
-tindxs = 1:2:15
+tindxs = 7:2:15
+
+
 #f = Figure(resolution = (2500, 1800), fontsize=26)
 f = Figure(resolution = (2200, 1400), fontsize=26)
-ga = f[1, 1:8] = GridLayout()
-gb = f[2, 1:8] = GridLayout()
-gc = f[3, 1:8] = GridLayout()
-gbd = f[4, 1:8] = GridLayout()
-gcd = f[5, 1:8] = GridLayout()
-#ge = f[6, 1:8] = GridLayout()
+ga = f[1, 1:8] = GridLayout() # vhat
+gb = f[2, 1:8] = GridLayout() # what
+gc = f[3, 1:8] = GridLayout() #<v'b'>
+gbd = f[4, 1:8] = GridLayout() #<w'b'>
+gcd = f[5, 1:8] = GridLayout() # grad
+ge = f[6, 1:8] = GridLayout() # diss
 gd = f[end+1, 1:8] = GridLayout()
 
 
@@ -478,5 +483,184 @@ lines!(ax3, phase_times, bi2, color=:firebrick2, lw = 5,)
 
 savename = "BfluxLineplots_Phavg_" * sn
 apath  = "Plots/"
+
+save(apath * savename * ".png", f)
+
+
+#f = Figure(resolution = (2500, 1800), fontsize=26)
+f = Figure(resolution = (2200, 1400), fontsize=26)
+ga = f[1, 1:5] = GridLayout() # vhat
+gb = f[2, 1:5] = GridLayout() # what
+gc = f[3, 1:5] = GridLayout() #<v'b'>
+gd = f[4, 1:5] = GridLayout() #<w'b'>
+ge = f[5, 1:5] = GridLayout() # grad
+gf = f[6, 1:5] = GridLayout() # diss
+
+# v
+gcb1 = f[1:2, 6] = GridLayout()
+# w
+
+#v'b', grad
+gcb2 = f[3:4, 6] = GridLayout()
+#w'b'
+
+# dissip
+gcb3 = f[5:6, 6] = GridLayout()
+
+gplots = [ga, gb, gc, gd, ge, gf]
+
+for g in gplots
+    if g == gf
+        for m = 1:5
+            if m==1
+                axi = Axis(g[1, m], ylabel = "z [m]", xlabel = "y [m]") 
+                global ax = axi
+                axi.xticks = 500:500:1000
+                axi.yticks = [-250, 0]
+            else
+                axi = Axis(g[1,m])
+                hideydecorations!(axi)
+                global ax = hcat(ax, axi)
+                axi.xticks = 500:500:1000
+            end
+        end
+        global axs = vcat(axs, ax)
+    else
+        for m = 1:5
+            if m==1
+                axi = Axis(g[1, m])
+                global ax = axi
+                hidexdecorations!(axi)
+                axi.yticks = [-250, 0]
+            else
+                axi = Axis(g[1, m])
+                global ax = hcat(ax, axi)
+                hidedecorations!(axi)
+            end
+        end
+        if g == ga
+            global axs = ax
+        else
+            global axs = vcat(axs, ax)
+        end
+    end
+    rowgap!(g, 5)
+    colgap!(g, 5)
+end
+
+for j = 1:length(axs)
+    limits!(axs[j], 0, 1500, -500, 0)
+end
+
+vmax = pm.U₀
+wmax = round(maximum(abs.(ŵ_Phavg))*0.8*100)*1e-2
+
+vbmax = round(maximum(abs.(vb_WpertPhavg_xavg))*0.5*1e5)*1e-5
+wbmax = round(maximum(abs.(wb_WpertPhavg_xavg))*0.5*1e5)*1e-5
+nabmax = round(maximum(abs.(vb_WpertPhavg_xavg_dy))*0.5*1e5)*1e-5
+
+vmax2 = string(round(maximum(abs.(0.2))*100)*1e-2/2)
+wmax2 = string(round(maximum(abs.(ŵ_Phavg))*0.8*100)*1e-2/2)
+vbmax2 = string(round(maximum(abs.(vb_WpertPhavg_xavg))*0.5*1e5)/2)
+wbmax2 = string(round(maximum(abs.(wb_WpertPhavg_xavg))*0.5*1e5)/2)
+nabmax2 = string(round(maximum(abs.(vb_WpertPhavg_xavg_dy))*0.5*1e5)/2)
+
+vblims = (-vbmax,vbmax)
+wblims = (-wbmax,wbmax)
+gradblims = (-nabmax, nabmax)
+
+time_pre = "t = "
+time_post = " Tσ"
+
+zb_cut = zb[2:end]
+yb_cut2 = yb_cut[2:end]
+
+bmin = round(pm.Ñ^2*500*1e3)*1e-3
+bstep = bmin/8
+
+for (m,idx) in enumerate(tindxs)
+    t = phase_times[idx]
+    phaselabel = time_pre * @sprintf("%0.2f", t) * time_post
+
+    v̂_Phavg_xavgi = v̂_Phavg_xavg[:,:,idx]
+    ŵ_Phavgi = ŵ_Phavg[:,:,idx]
+
+    vb_WpertPhavg_xavgi = vb_WpertPhavg_xavg[:,:,idx]
+    wb_WpertPhavg_xavgi = wb_WpertPhavg_xavg[:,:,idx]
+    b_Phavg_xavgi = b_Phavg_xavg[:,:,idx]
+    ∇WpertPhavg_xavgi  = ∇WpertPhavg_xavg[:,:,idx]
+    e_Phavg_xavgi = e_Phavg_xavg[:,:,idx]
+     
+    global hv = heatmap!(axs[1, m], yb_cut, zb, v̂_Phavg_xavgi, colormap = :balance, colorrange = (-vmax, vmax))
+    lines!(axs[1, m], yb, land, color=:black, lw = 4)
+    lines!(axs[1, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    contour!(axs[1, m], yb_cut, zb, b_Phavg_xavgi, color = :black, lw = 6, levels = -bmin:bstep:0, alpha = 0.3)
+
+    global hw = heatmap!(axs[2, m], yb_cut, zb, ŵ_Phavgi, colormap = :balance, colorrange = (-wmax, wmax))
+    lines!(axs[2, m], yb, land, color=:black, lw = 4)
+    lines!(axs[2, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    contour!(axs[2, m], yb_cut, zb, b_Phavg_xavgi, color = :black, lw = 6, levels = -bmin:bstep:0, alpha = 0.3)
+
+    global hvb = heatmap!(axs[3, m], yb_cut, zb, vb_WpertPhavg_xavgi, colormap = :balance, colorrange = vblims)
+    lines!(axs[3, m], yb, land, color=:black, lw = 4)
+    lines!(axs[3, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    contour!(axs[3, m], yb_cut, zb, b_Phavg_xavgi, color = :black, lw = 6, levels = -bmin:bstep:0, alpha = 0.3)
+    
+    global hwb = heatmap!(axs[4, m], yb_cut, zb, wb_WpertPhavg_xavgi, colormap = :balance, colorrange = wblims)
+    lines!(axs[4, m], yb, land, color=:black, lw = 4)
+    lines!(axs[4, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    contour!(axs[4, m], yb_cut, zb, b_Phavg_xavgi, color = :black, lw = 6, levels = -bmin:bstep:0, alpha = 0.3)
+
+    global hgradub = heatmap!(axs[5, m], yb_cut2, zb_cut, ∇WpertPhavg_xavgi, colormap = :balance, colorrange = gradblims)
+    lines!(axs[5, m], yb, land, color=:black, lw = 4)
+    lines!(axs[5, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    contour!(axs[5, m], yb_cut, zb, b_Phavg_xavgi, color = :black, lw = 6, levels = -bmin:bstep:0, alpha = 0.3)
+
+    global heps = heatmap!(axs[6, m], yb_cut, zb, log10.(clamp.(e_Phavg_xavgi, 1e-14, 1)), colormap = :thermal, colorrange = (-8,-5))
+    lines!(axs[6, m], yb, land, color=:black, lw = 4)
+    lines!(axs[6, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+    
+    Label(f[1, m, Top()], phaselabel, valign = :bottom,
+    font = :bold, fontsize = 36,
+    padding = (0, 0, 5, 0))
+end
+
+text!(axs[1, 1], Point.(50, -350), text = "⟨v̂⟩ₚₕ", align = (:left, :center), color = :black, 
+    font = :bold, fontsize = 36)
+text!(axs[2, 1], Point.(50, -350), text = "⟨ŵ⟩ₚₕ", align = (:left, :center), color = :black, 
+    font = :bold, fontsize = 36)
+text!(axs[3, 1], Point.(50, -350), text = "⟨v'b'⟩ₚₕ", align = (:left, :center), color = :black, 
+    font = :bold, fontsize = 36)
+text!(axs[4, 1], Point.(50, -350), text = "⟨w'b'⟩ₚₕ", align = (:left, :center), color = :black, 
+    font = :bold, fontsize = 36)
+text!(axs[5, 1], Point.(50, -350), text = "∇⋅⟨u⃗'b'⟩ₚₕ", align = (:left, :center), color = :black, 
+    font = :bold, fontsize = 36)
+text!(axs[6, 1], Point.(50, -350), text = "⟨ε⟩ₚₕ", align = (:left, :center), color = :white, 
+    font = :bold, fontsize = 36)
+
+# create colorbars the size of the whole data set
+cb1 = Colorbar(gcb1[1,1], hv, ticks = (-vmax/2:vmax/2:vmax/2, ["-" * vmax2, "0", vmax2] ),
+size =25, flipaxis=false, label = "⟨v̂⟩ₚₕ", labelsize = 30)
+cb2 = Colorbar(gcb1[1,2], hw, ticks = (-wmax/2:wmax/2:wmax/2, ["-" * wmax2, "0", wmax2] ), 
+size =25, label = "⟨ŵ⟩ₚₕ", labelsize = 30)
+
+cb3 = Colorbar(gcb2[1,1], hvb, ticks = (-vbmax/2:vbmax/2:vbmax/2, ["-" * vbmax2, "0", vbmax2] ),
+size =25, flipaxis=false, label = "⟨v'b'⟩ × 10⁻⁵", labelsize = 30)
+cb4 = Colorbar(gcb2[1,2], hwb, ticks = (-wbmax/2:wbmax/2:wbmax/2, ["-" * wbmax2, "0", wbmax2] ), 
+size =25, label = "⟨w'b'⟩ × 10⁻⁵", labelsize = 30)
+
+cb5 = Colorbar(gcb3[1,1], hgradub, ticks = (-nabmax/2:nabmax/2:nabmax/2,  ["-" * nabmax2, "0", nabmax2] ), 
+size =25, flipaxis=false, label = "∇⋅⟨u⃗'b'⟩ₚₕ  × 10⁻⁵", labelsize = 30)
+cb6 = Colorbar(gcb3[1,2], heps, ticks = (-8:1:-6, ["10⁻⁸", "10⁻⁷", "10⁻⁶"] ), 
+size =25, label = "⟨ε⟩ₚₕ" , labelsize = 30)
+
+colgap!(gcb1, 10)
+colgap!(gcb2, 10)
+colgap!(gcb3, 10)
+
+colsize!(f.layout, 6, Relative(0.02))
+
+savename = "blfux_Phavg_paper" * sn
+apath  = "Analysis/Plots/"
 
 save(apath * savename * ".png", f)
