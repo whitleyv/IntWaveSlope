@@ -1,24 +1,27 @@
-using Plots
-using Measures
 using Statistics
 using Printf
-using Oceananigans
 using CurveFit
-using ArgParse
 using JLD2
+using CairoMakie
+using GeometryBasics
 
 apath = "Analysis/Plots/"
 dpath = "Data/"
 filescalename = dpath * "DeltavAllScale.jld2"
 filescalename_oth = dpath * "DeltavAllScale_oth.jld2"
 dnames = "../SetnamesList.jld2"
+
+scale_file_sn = jldopen(dnames, "r+")
+δs = scale_file_sn["δs"][1:22]
+
 scale_file = jldopen(filescalename, "r+")
 scale_file_oth = jldopen(filescalename_oth, "r+")
-dfile = jldopen(dnames, "r+")
-setnames = vcat(scale_file["setnames"],scale_file_oth["setnames_oth"])
-δ = vcat(scale_file["δ"],scale_file_oth["δ_oth"])
-Cheight_havg_tavg =vcat(scale_file["Cheight_havg_tavg"],scale_file["Cheight_havg_tavg_oth"])
-Nheight_havg_tavg =vcat(scale_file["Nheight_havg_tavg"],scale_file["Nheight_havg_tavg_oth"])
+
+setnames = vcat(scale_file["setnames"][1:22],scale_file_oth["setnames_oth"])
+δ = vcat(δs,scale_file_oth["δ_oth"])
+
+Cheight_havg_tavg =vcat(scale_file["Cheight_havg_tavg"][1:22],scale_file_oth["Cheight_havg_tavg_oth"])
+Nheight_havg_tavg =vcat(scale_file["Nheight_havg_tavg"][1:22],scale_file_oth["Nheight_havg_tavg_oth"])
 
 @info "Find Bestfit Lines"
 
@@ -30,13 +33,10 @@ Nheight_havg_tavg =vcat(scale_file["Nheight_havg_tavg"],scale_file["Nheight_havg
 # varying N or U to change delat value in sim, varying N changes sigma and f respectively as well
 VaryN = 1:11
 VaryU = 12:22
-# varying sigma to change criticality, holding N and f constant
-Varysg = 23:26
-# varying sigma but not changing criticaility, holding N and f const but changing topography
-Varys = 27:30
 # ones that are subcritical out of sigma varying set
 Varysg_sub = 25:26
-Varysg_nosub = 23:24
+# all the ones where sigma is varied in any way
+Varyoth = 23:30     
 
 
 # simulations where N is varied to change delta
@@ -161,3 +161,61 @@ Plots.text(big_title, 22)), axis=nothing, grid=false, leg=false,
 foreground_color_subplot=colorant"white")
 
 fin = plot(BigT, bothplots, layout=grid(2, 1, heights=[0.05,0.95]))
+
+
+
+
+
+f = Figure(resolution = (1000, 1400), fontsize=26)
+ga = f[1, 1] = GridLayout()
+
+ax1 = Axis(ga[1, 1],  xlabel = "δ [m]", ylabel = "Tracer Thickness, Lₜᵣ [m]")
+ax1.xticks = 0:40:160
+ax1.yticks = 0:40:160
+limits!(ax1, 0, 165, 0, 165)
+
+ax2 = Axis(ga[2, 1],  xlabel = "δ [m]", ylabel = "Stratification Anomaly Thickness, Lₙ₂ [m]")
+ax2.xticks = 0:40:160
+ax2.yticks = 0:40:160
+limits!(ax2, 0, 165, 0, 165)
+
+hidexdecorations!(ax1, grid = false)
+
+p_big = decompose(Point2f, Circle(Point2f(0), 0.6))
+p_small = decompose(Point2f, Circle(Point2f(0), 0.5))
+
+vsp = scatter!(ax1, δ[Varyoth], Cheight_havg_tavg[Varyoth], markersize = 25, marker=:star4, 
+            color =:darkgreen, strokewidth = 1, strokecolor = :black)
+vsbp = scatter!(ax1, δ[Varysg_sub], Cheight_havg_tavg[Varysg_sub], markersize = 25, 
+    marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+vnp = scatter!(ax1, δ[VaryN], Cheight_havg_tavg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+vup = scatter!(ax1, δ[VaryU], Cheight_havg_tavg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+scatter!(ax2, δ[Varyoth], Nheight_havg_tavg[Varyoth], markersize = 25, marker=:star4, 
+            color =:darkgreen, strokewidth = 1, strokecolor = :black)
+scatter!(ax2, δ[Varysg_sub], Nheight_havg_tavg[Varysg_sub], markersize = 25, 
+    marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+scatter!(ax2, δ[VaryN], Nheight_havg_tavg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+scatter!(ax2, δ[VaryU], Nheight_havg_tavg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+Legend( ga[1, 1, Top()], [vnp, vup, vsp, vsbp], ["Vary N₀", "Vary V₀", "Vary σ", "Subcritical γ"],
+                tellheight = false, tellwidth = false,
+                margin = (10, 10, 10, 15), framevisible = false, patchlabelgap = 7,
+                halign = :center, valign = :bottom, orientation = :horizontal)
+
+Label(ga[1, 1, TopLeft()], "a",
+                fontsize = 30,
+                font = :bold,
+                padding = (-10, 5, 5, 10),
+                halign = :right)
+Label(ga[2, 1, TopLeft()], "b",
+                fontsize = 30,
+                font = :bold,
+                padding = (0, 5, 5, 10),
+                halign = :right)
+savename = apath * "Paper_Intrusion_v_Delta_All"
+save(savename * ".png", f, px_per_unit = 2)

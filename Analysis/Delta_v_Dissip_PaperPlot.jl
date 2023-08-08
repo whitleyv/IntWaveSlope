@@ -1,10 +1,7 @@
-using Plots
 using Measures
 using Statistics
 using Printf
-#using Oceananigans
 using CurveFit
-#using ArgParse
 using JLD2
 
 #ENV["GKSwstype"] = "nul" # if on remote HPC
@@ -84,152 +81,119 @@ xminLt = minimum(LtN)
 ylime = maximum(eps_endAvg)
 ymine = minimum(eps_endAvg)
 
-# simulations where N is varied to change delta
-dp = plot(δN, m_εδ .* δN .+ b_εδ, label =  "", color=:gray30, lw = 4)
-scatter!(δN[VaryN], eps_endAvg[VaryN], label ="Vary N", markersize = 8, 
-    color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
-    tickfont = 15, guidefontsize = 20, titlefont = 20, legendfont = 15, title = "", 
-    bottom_margin=10mm, right_margin = 10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.8e-5), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:5*1e-4:1e-3)
-# simulations where U is varied to change delta
-scatter!(δN[VaryU], eps_endAvg[VaryU], label ="Vary V₀", markersize = 8, marker=:utriangle, color = :dodgerblue2)
-plot!(LtN, -1 .* m_εLt .* LtN .- 5, label =  @sprintf("%0.3f Lₜ²N³", m_εLt),
-        color=:gray50, lw = 4)
-plot!(δ, -1 .* m_εδ .* δ .- b_εδ, label =  @sprintf("%0.3f δ²N³", m_εδ),
-        color=:gray30, lw = 4)
+using CairoMakie
+using GeometryBasics
 
-lp = plot(LtN, m_εLt .* LtN .+ b_εLt, color=:gray50, lw = 4)
-scatter!(LtN[VaryN], eps_endAvg[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨ε⟩ [m²s⁻³]",
-    tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
-    bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-4, 1.2*1e-3), ylims = (-1e-6, 3.8*1e-5), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:5*1e-4:1e-3)
-# simulations where U is varied to change delta
-scatter!(LtN[VaryU], eps_endAvg[VaryU],  markersize = 8, marker=:utriangle, color = :dodgerblue2, legend = false)
+f = Figure(resolution = (1400, 800), fontsize=26)
+ga = f[1, 1] = GridLayout()
 
-bothplots = plot(lp, dp,)
-y = 1:5
-big_title = "Mean Dissipation Scales With Energetically Motivated Terms"
-BigT = Plots.scatter(y, marker=0, markeralpha=0, annotations=(3, y[3],
-Plots.text(big_title, 22)), axis=nothing, grid=false, leg=false,
-foreground_color_subplot=colorant"white")
+ax1 = Axis(ga[1, 1],  xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨ε⟩ [m²s⁻³]")
+ax1.xticks = (0:5*1e-4:1e-3, ["0", "5×10⁻⁴", "1×10⁻³"])
+ax1.yticks = (0:1e-5:3e-5, ["0", "1×10⁻⁵", "2×10⁻⁵", "3×10⁻⁵"])
+limits!(ax1, -3e-5, 1.2*1e-3, 0, 3.8e-5)
 
-fin = plot(BigT, bothplots, layout=grid(2, 1, heights=[0.05,0.95]))
+ax2 = Axis(ga[1, 2],  xlabel = "δ²N³ [m²s⁻³]")
+ax2.xticks = (0:5*1e-4:1e-3, ["0", "5×10⁻⁴", "1×10⁻³"])
+ax2.yticks = (0:1e-5:3e-5, ["0", "1×10⁻⁵", "2×10⁻⁵", "3×10⁻⁵"])
+limits!(ax2, -3e-5, 1.2*1e-3, 0, 3.8e-5)
 
-savefig(apath * "Paper_AvgDissip_v_LtDelta_Full.png")
+# inset 1
+xL1 = 0
+xR1 = 6e-5
+yT1 = 6e-6
+yB1 = 4e-6
 
-""" Plotting Cut Plots for Avg Dissipation"""
+poly!(ax1, Point2f[(6e-4, 2.9e-6), (1.1e-3, 2.9e-6), (1.1e-3, 1.55e-5), (6e-4, 1.55e-5)], color = :white)
 
-xlimLt_cut =maximum(LtN_cut)
-xlimd_cut = maximum(δN_cut)
-ylime_cut = maximum(eps_endAvg_cut)
+poly!(ax1, Point2f[(xL1, yB1), (xR1, yB1), (xR1, yT1), (xL1, yT1)], 
+        color = :transparent, strokewidth = 3, strokecolor = (:darkgreen, 0.6))
 
-# simulations where N is varied to change delta
-dp = plot(δN_cut, m_εδ_cut .* δN_cut .+ b_εδ_cut, label =  "", color=:gray30, lw = 4)
-scatter!(δN_cut[VaryN_cut], eps_endAvg_cut[VaryN_cut], label ="Vary N", markersize = 8, color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
-    tickfont = 15, guidefontsize = 20, titlefont = 20, legendfont = 15, title = "", 
-    bottom_margin=10mm, right_margin = 10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-6, 1.0*1e-3), ylims = (-1e-6, 1.2*1e-5), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:5*1e-4:1e-3)
-# simulations where U is varied to change delta
-scatter!(δN_cut[VaryU_cut], eps_endAvg_cut[VaryU_cut], label ="Vary V₀", markersize = 8, marker=:utriangle, color = :dodgerblue2)
-plot!(LtN_cut, -1 .* m_εLt_cut .* LtN_cut .- 5, label =  @sprintf("%0.3f Lₜ²N³", m_εLt_cut),
-        color=:gray50, lw = 4)
-plot!(δN_cut, -1 .* m_εδ_cut .* δN_cut .- 5, label =  @sprintf("%0.3f δ²N³", m_εδ_cut),
-        color=:gray30, lw = 4)
+# inset 2
+xL2 = 7e-5
+xR2 = 2.5e-4
+yT2 = 6e-6
+yB2 = 4e-6
 
-lp = plot(LtN_cut, m_εLt_cut .* LtN_cut .+ b_εLt_cut, color=:gray50, lw = 4)
-scatter!(LtN_cut[VaryN_cut], eps_endAvg_cut[VaryN_cut], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨ε⟩ [m²s⁻³]",
-    tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
-    bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-6, 3.0*1e-4), ylims = (-1e-6, 1.2*1e-5), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:1*1e-4:2e-4)
-# simulations where U is varied to change delta
-scatter!(LtN_cut[VaryU_cut], eps_endAvg_cut[VaryU_cut],  markersize = 8, marker=:utriangle, color = :dodgerblue2, legend = false)
+poly!(ax2, Point2f[(7e-5, 2.3e-5), (5.7e-4, 2.3e-5), (5.7e-4, 3.51e-5), (7e-5, 3.51e-5)], color = :white)
 
-bothplots = plot(lp, dp,)
-y = 1:5
-big_title = "Mean Dissipation Scales With Energetically Motivated Terms"
-BigT = Plots.scatter(y, marker=0, markeralpha=0, annotations=(3, y[3],
-Plots.text(big_title, 22)), axis=nothing, grid=false, leg=false,
-foreground_color_subplot=colorant"white")
+poly!(ax2, Point2f[(xL2, yB2), (xR2, yB2), (xR2, yT2), (xL2, yT2)], 
+        color = :transparent, strokewidth = 3, strokecolor = (:darkgreen, 0.6))
 
-fin = plot(BigT, bothplots, layout=grid(2, 1, heights=[0.05,0.95]))
+dx1 = round(((xR1 - xL1)/6) * 1e6)*1e-6
+dy1 = round(((yT1 - yB1)/6) * 1e7)*1e-7
 
-savefig(apath * "Paper_AvgDissip_v_LtDelta_Cut.png")
+xtL1 = xL1 + dx1
+xtR1 = xR1 - dx1
+ytT1 = yB1 + dy1
+ytB1 = yT1 - dy1
 
+# add box inside first plot
+inset_ax1 = Axis(f, bbox = BBox(448, 689, 132, 352), backgroundcolor = :white,
+    spinewidth = 4, leftspinecolor = :darkgreen, rightspinecolor = :darkgreen, 
+    topspinecolor = :darkgreen, bottomspinecolor = :darkgreen)
 
-""" Plotting Full Plots for Max Dissipation"""
+inset_ax1.xticks = [xtL1, xtR1] #(0:2e-5:4e-5, ["0", "2×10⁻⁵", "4×10⁻⁵"])
+inset_ax1.yticks = [ytB1, ytT1] #(4e-6:2e-6:6e-6, ["4×10⁻⁶", "6×10⁻⁶"])
+limits!(inset_ax1, xL1, xR1, yB1, yT1)
 
-ylime = maximum(eps_endMax)
+dx2 = round(((xR2 - xL2)/6) * 1e5)*1e-5
+dy2 = round(((yT2 - yB2)/6) * 1e7)*1e-7
 
-# simulations where N is varied to change delta
-dp = plot(δN, m_Mεδ .* δN .+ b_Mεδ, label =  "", color=:gray30, lw = 4)
-scatter!(δN[VaryN], eps_endMax[VaryN], label ="Vary N", markersize = 8, color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
-    tickfont = 15, guidefontsize = 20, titlefont = 20, legendfont = 15, title = "", 
-    bottom_margin=10mm, right_margin = 10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-5, 1.2*1e-3), ylims = (-1e-5, 1.2*1e-3), size = (1500, 600), xformatter = :scientific, yformatter = :scientific,
-    xticks = 0:5*1e-4:1e-3)
-# simulations where U is varied to change delta
-scatter!(δN[VaryU], eps_endMax[VaryU], label ="Vary V₀", markersize = 8, marker=:utriangle, color = :dodgerblue2)
-plot!(LtN, -1 .* m_MεLt .* LtN .- 5, label =  @sprintf("%0.3f Lₜ²N³", m_MεLt), 
-        color=:gray50, lw = 4)
-plot!(δ, -1 .* m_Mεδ .* δ .- 5, label =  @sprintf("%0.3f δ²N³", m_Mεδ),
-        color=:gray30, lw = 4)
+xtL2 = xL2 + dx2
+xtR2 = xR2 - dx2
+ytT2 = yB2 + dy2
+ytB2 = yT2 - dy2
 
-lp = plot(LtN, m_MεLt .* LtN .+ b_MεLt, color=:gray50, lw = 4)
-scatter!(LtN[VaryN], eps_endMax[VaryN], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "⟨εₘₐₓ⟩ [m²s⁻³]",
-    tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
-    bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-5, 1.2*1e-3), ylims = (-1e-5, 1.2*1e-3), size = (1500, 600), xformatter = :scientific, yformatter = :scientific,
-    xticks = 0:5*1e-4:1e-3)
-# simulations where U is varied to change delta
-scatter!(LtN[VaryU], eps_endMax[VaryU],  markersize = 8, marker=:utriangle, color = :dodgerblue2, legend = false)
+inset_ax2 = Axis(f, bbox = BBox(844, 1085, 475, 695), backgroundcolor = :white,
+    spinewidth = 4, leftspinecolor = :darkgreen, rightspinecolor = :darkgreen, 
+    topspinecolor = :darkgreen, bottomspinecolor = :darkgreen,
+    yaxisposition = :right)
 
-bothplots = plot(lp, dp,)
-y = 1:5
-big_title = "Max Dissipation Scales With Energetically Motivated Terms"
-BigT = Plots.scatter(y, marker=0, markeralpha=0, annotations=(3, y[3],
-Plots.text(big_title, 22)), axis=nothing, grid=false, leg=false,
-foreground_color_subplot=colorant"white")
+inset_ax2.xticks =  ([xtL2, xtR2], ["1×10⁻⁴", "2.2×10⁻⁴"])#(1e-4:5e-5:2e-4, ["1×10⁻⁴", "1.5×10⁻⁴", "2×10⁻⁴"])
+inset_ax2.yticks =  [ytB2, ytT2] #(4e-6:2e-6:6e-6, ["4×10⁻⁶", "6×10⁻⁶"])
+limits!(inset_ax2, xL2, xR2, yB2, yT2)
 
-fin = plot(BigT, bothplots, layout=grid(2, 1, heights=[0.05,0.95]))
+hideydecorations!(ax2, grid = false)
 
-savefig(apath * "Paper_MaxDissip_v_LtDelta_Full.png")
+translate!(inset_ax1.scene, 0, 0, 50) # bring box to front
+translate!(inset_ax2.scene, 0, 0, 50) # bring box to front
 
-ylime = maximum(eps_endMax_cut)
+vnp = scatter!(ax1, LtN[VaryN], eps_endAvg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+vup = scatter!(ax1, LtN[VaryU], eps_endAvg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+#rangebars!(ax1, [5e-5], [0], [6e-6], color = :darkgreen, whiskerwidth = 10, linewidth = 4, direction = :y)
 
-# simulations where N is varied to change delta
-dp = plot(δN_cut, m_Mεδ_cut .* δN_cut .+ b_Mεδ_cut, label =  "", color=:gray30, lw = 4)
-scatter!(δN_cut[VaryN_cut], eps_endMax_cut[VaryN_cut], label ="Vary N", markersize = 8, color =:firebrick2, xlabel = "δ²N³ [m²s⁻³]", yticks=false,
-    tickfont = 15, guidefontsize = 20, titlefont = 20, legendfont = 15, title = "", 
-    bottom_margin=10mm, right_margin = 10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-6, 1.0*1e-3), ylims = (-1e-5, 5*1e-4), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:3e-4:6e-4)
-# simulations where U is varied to change delta
-scatter!(δN_cut[VaryU_cut], eps_endMax_cut[VaryU_cut], label ="Vary V₀", markersize = 8, marker=:utriangle, color = :dodgerblue2)
-plot!(LtN_cut, -1 .* m_MεLt_cut .* LtN_cut .- 5, label =  @sprintf("%0.3f Lₜ²N³", m_MεLt_cut),
-        color=:gray50, lw = 4)
-plot!(δN_cut, -1 .* m_Mεδ_cut .* δN_cut .- 5, label =  @sprintf("%0.3f δ²N³", m_Mεδ_cut),
-        color=:gray30, lw = 4)
+scatter!(ax2, δN[VaryN], eps_endAvg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+scatter!(ax2, δN[VaryU], eps_endAvg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
 
-lp = plot(LtN_cut, m_MεLt_cut .* LtN_cut .+ b_MεLt_cut, color=:gray50, lw = 4)
-scatter!(LtN_cut[VaryN_cut], eps_endMax_cut[VaryN_cut], markersize = 8, color =:firebrick2, xlabel = "Lₜ²N³ [m²s⁻³]", ylabel = "ε [m²s⁻³]",
-    tickfont = 15, guidefontsize = 20, titlefont = 20, title = "", 
-    bottom_margin=10mm, left_margin=10mm, legend = :topleft, marker=:c, 
-    xlims = (-1e-6, 3.0*1e-4), ylims = (-1e-5, 5*1e-4), size = (1500, 600), xformatter = :scientific,
-    xticks = 0:1*1e-4:2e-4)
-# simulations where U is varied to change delta
-scatter!(LtN_cut[VaryU_cut], eps_endMax_cut[VaryU_cut],  markersize = 8, marker=:utriangle, color = :dodgerblue2, legend = false)
+Legend( ga[1, 1, Top()], [vnp, vup], ["Vary N₀", "Vary V₀"],
+                tellheight = false, tellwidth = false,
+                margin = (10, 10, 10, 15), framevisible = false, patchlabelgap = 7,
+                halign = :center, valign = :bottom, orientation = :horizontal)
 
-bothplots = plot(lp, dp,)
-y = 1:5
-big_title = "Max Dissipation Scales With Energetically Motivated Terms"
-BigT = Plots.scatter(y, marker=0, markeralpha=0, annotations=(3, y[3],
-Plots.text(big_title, 22)), axis=nothing, grid=false, leg=false,
-foreground_color_subplot=colorant"white")
+Label(ga[1, 1, TopLeft()], "a",
+                fontsize = 30,
+                font = :bold,
+                padding = (5, 5, 5, 5),
+                halign = :left)
+Label(ga[1, 2, TopLeft()], "b",
+                fontsize = 30,
+                font = :bold,
+                padding = (5, 5, 5, 5),
+                halign = :left)
 
-fin = plot(BigT, bothplots, layout=grid(2, 1, heights=[0.05,0.95]))
+scatter!(inset_ax1, LtN[VaryN], eps_endAvg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+scatter!(inset_ax1, LtN[VaryU], eps_endAvg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
 
-savefig(apath * "Paper_MaxDissip_v_LtDelta_Cut.png")
+scatter!(inset_ax2, δN[VaryN], eps_endAvg[VaryN], markersize = 25, marker = :circle, 
+            color =:firebrick2, strokewidth = 1, strokecolor = :black)
+scatter!(inset_ax2, δN[VaryU], eps_endAvg[VaryU], markersize = 25, marker=:utriangle, 
+            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+savename = apath * "Paper_Dissip_v_LtDelta_All"
+save(savename * ".png", f, px_per_unit = 2)
