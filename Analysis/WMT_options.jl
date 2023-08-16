@@ -7,9 +7,10 @@ using CairoMakie
 ENV["GKSwstype"] = "nul" # if on remote HPC
 
 path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+
 apath = path_name * "Analysis/"
 
-include("../parameters.jl")
+include("parameters.jl")
 
 setname = "U300N100Lz100g100"
 
@@ -46,9 +47,11 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 
 name1_prefix = "IntWave_" * setname
 name2_prefix = "IntWave_smdt_" * setname
+name3_prefix = "IntWave_postspin_" * setname
 
 filepath1 = path_name * name1_prefix * ".jld2"
 filepath2 = path_name * name2_prefix * ".jld2"
+filepath3 = path_name * name3_prefix * ".jld2"
 
 @info "getting data from: " * setname
 
@@ -67,208 +70,441 @@ e_timeseries = FieldTimeSeries(filepath1,"ϵ");
 Cg_timeseries = FieldTimeSeries(filepath2,"Cg");
 Cs_timeseries = FieldTimeSeries(filepath2,"Cs");
 Cgr_timeseries = FieldTimeSeries(filepath1,"Cgr");
+Cgl_timeseries = FieldTimeSeries(filepath3, "Cg");
 
 CSi = interior(Cs_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
 CGi = interior(Cg_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
 CGri = interior(Cgr_timeseries)[:, 1:ylength, 1:zlength,:];
+Cgli = interior(Cgl_timeseries)[:, 1:ylength, 1:xzlength,:];
 ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
 Bi = interior(b_timeseries)[:, 1:ylength, 1:zlength,:];
 
 @info "Computing Volumes..."
-ini_Nisos = 35 # number of bins
-Δb = -500*pm.Ñ^2/ini_Nisos # "width" of bins
-#Nisos = ini_Nisos + 3 
+ini_Nisos = 40 # number of bins
+Δb = -1.47*1e-4 #-500*pm.Ñ^2/ini_Nisos # "width" of bins
 
-# buoynacy sum
-bsum = zeros(ini_Nisos, tlength)
-# total concentration and dissip
-contotG = zeros(ini_Nisos, tlength)
-contotS = zeros(ini_Nisos, tlength)
-etot = zeros(ini_Nisos, tlength)
-# average concentration and dissip
-cavg = zeros(ini_Nisos, tlength)
-eavg = zeros(ini_Nisos, tlength)
+function VolumeBinning(ini_Nisos, tlength, Δb, Bi, CGi, CSi, ei)
+    # buoynacy sum
+    bsum = zeros(ini_Nisos, tlength)
+    # total concentration and dissip
+    contotG = zeros(ini_Nisos, tlength)
+    contotS = zeros(ini_Nisos, tlength)
+    etot = zeros(ini_Nisos, tlength)
 
-for j = 1:tlength
-    @info "Time $j of $tlength..."
-    # at each time step get the data at (x,ycut,z)
-    bj = Bi[:,:,:,j]
-    cjG = CGi[:,:,:,j]
-    cjS = CSi[:,:,:,j]
-    ej = ei[:,:,:,j]
 
-    # for each buoynacy class:
-    for n = 1:ini_Nisos
-        # (1) CCC locations in the density class
-        boolB = (bj.< Δb*(n-1)) .& (bj.>= Δb *n)
-        # finding the volume of that density class
-        bsum[n,j]=sum(boolB)
-        # dye in layer
-        cS_inb = cjS[boolB]
-        cG_inb = cjG[boolB]
-        # dissip in layer
-        e_inb = ej[boolB]
-        # total concent in n
-        contotG[n,j] = sum(cG_inb)
-        contotS[n,j] = sum(cS_inb)
-        # total dissip in n
-        etot[n,j] = sum(e_inb)
-        # average dye in n
-        cavg[n,j] = mean(cS_inb)
-        # average dissip in n
-        eavg[n,j] = mean(e_inb)
+    for j = 1:tlength
+        @info "Time $j of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bj = Bi[:,:,:,j]
+        cjG = CGi[:,:,:,j]
+        cjS = CSi[:,:,:,j]
+        ej = ei[:,:,:,j]
+
+        # for each buoynacy class:
+        for n = 1:ini_Nisos
+            # (1) CCC locations in the density class
+            boolB = (bj.< Δb*(n-1)) .& (bj.>= Δb *n)
+            # finding the volume of that density class
+            bsum[n,j]=sum(boolB)
+            # dye in layer
+            cS_inb = cjS[boolB]
+            cG_inb = cjG[boolB]
+            # dissip in layer
+            e_inb = ej[boolB]
+            # total concent in n
+            contotG[n,j] = sum(cG_inb)
+            contotS[n,j] = sum(cS_inb)
+            # total dissip in n
+            etot[n,j] = sum(e_inb)
+            # average dye in n
+        # cavg[n,j] = mean(cS_inb)
+            # average dissip in n
+            #eavg[n,j] = mean(e_inb)
+        end
     end
+
+    # change in volume from initial
+    ΔVol = (bsum .- bsum[:,1]).* 16
+    # change in concentration from initial
+    ΔConG = (contotG .- contotG[:,1] ) .* 16
+    ΔConS = (contotS .- contotS[:,1] ) .* 16
+
+    reverse!(ΔVol, dims=1)
+    reverse!(ΔConG, dims=1)
+    reverse!(ΔConS, dims=1)
+    reverse!(etot, dims=1)
+
+    return ΔVol, ΔConG, ΔConS, etot
 end
 
-# change in volume from initial
-ΔVol = (bsum .- bsum[:,1]).* 16
-# change in concentration from initial
-ΔConG = (contotG .- contotG[:,1] ) .* 16
-ΔConS = (contotS .- contotS[:,1] ) .* 16
+#####################
+## Only including values within 1 delta of the slope
+####################
+
+function VolumeBinning(ini_Nisos, tlength, Δb, Bi, CGi, CSi, ei, δdep, ylength, zlength, xlength, yb, zb)
+
+    YXgrid = reshape(repeat(yb[1:ylength], zlength*xlength), ylength, zlength, xlength)
+    SlopeGridYX_pd = curvedslope.(YXgrid) .+ δdep
+    boolYX = SlopeGridYX_pd .>= zb[1:zlength]';  # all the values less than slope + delta
+    boolYX_perm = permutedims(boolYX, [3, 1, 2])
+
+    # buoynacy sum
+    bsum = zeros(ini_Nisos, tlength)
+    # total concentration and dissip
+    contotG = zeros(ini_Nisos, tlength)
+    contotS = zeros(ini_Nisos, tlength)
+    etot = zeros(ini_Nisos, tlength)
+
+    for j = 1:tlength
+        @info "Time $j of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bj = Bi[:,:,:,j]
+        cjG = CGi[:,:,:,j]
+        cjS = CSi[:,:,:,j]
+        ej = ei[:,:,:,j]
+
+        bj_slope = bj[boolYX_perm]
+        cjG_slope = cjG[boolYX_perm]
+        cjS_slope = cjS[boolYX_perm]
+        ej_slope = ej[boolYX_perm]
+    
+        # for each buoynacy class:
+        for n = 1:ini_Nisos
+            # (1) CCC locations in the density class
+            boolB = (bj_slope.< Δb*(n-1)) .& (bj_slope.>= Δb *n)
+            # finding the volume of that density class
+            bsum[n,j]=sum(boolB)
+            # dye in layer
+            cS_inb = cjS_slope[boolB]
+            cG_inb = cjG_slope[boolB]
+            # dissip in layer
+            e_inb = ej_slope[boolB]
+            # total concent in n
+            contotG[n,j] = sum(cG_inb)
+            contotS[n,j] = sum(cS_inb)
+            # total dissip in n
+            etot[n,j] = sum(e_inb)
+        end    
+    end
+
+    # change in volume from initial
+    ΔVol = (bsum .- bsum[:,1]).* 16
+    # change in concentration from initial
+    ΔConG = (contotG .- contotG[:,1] ) .* 16
+    ΔConS = (contotS .- contotS[:,1] ) .* 16
+
+    reverse!(ΔVol, dims=1)
+    reverse!(ΔConG, dims=1)
+    reverse!(ΔConS, dims=1)
+    reverse!(etot, dims=1)
+
+    return ΔVol, ΔConG, ΔConS, etot
+end
+
+(ΔVol_full, ΔConG_full, ΔConS_full, etot_full) = VolumeBinning(ini_Nisos, tlength, Δb, Bi, CGi, CSi, ei)
+(ΔVol_1d, ΔConG_1d, ΔConS_1d, etot_1d) = VolumeBinning(ini_Nisos, tlength, Δb, Bi, CGi, CSi, ei,
+                (pm.U₀/pm.Ñ), ylength, zlength, xlength, yb, zb)
+(ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d) = VolumeBinning(ini_Nisos, tlength, Δb, Bi, CGi, CSi, ei,
+                0.25*(pm.U₀/pm.Ñ), ylength, zlength, xlength, yb, zb)
 
 @info "Calculating Wave Indices..."
 include("WaveValues.jl")
+
 wave_info=get_wave_indices(b_timeseries, pm, tlength)
-# rolling wave average over two waves
-WL = wave_info.Wl
-nTσ = wave_info.nTσ
-Wtlength = length(WL+1:WL*nTσ-WL)
 
-# volume change since initial
-ΔVol_rWavg = zeros(ini_Nisos, Wtlength)
-# change in total concentration since initial
-ΔConG_rWavg = zeros(ini_Nisos, Wtlength)
-ΔConS_rWavg = zeros(ini_Nisos, Wtlength)
-# average dye in n
-Conavg_rWavg = zeros(ini_Nisos, Wtlength)
-# average dissip in n
-eavg_rWavg = zeros(ini_Nisos, Wtlength)
-# total issipation
-etot_rWavg = zeros(ini_Nisos, Wtlength)
+function PhaseAveraging(wave_info, ΔVol, ΔConG, ΔConS, etot, waveframe)
+    #####################
+    # Phase averaging 
+    #####################
+    end5waves = wave_info.WavePeriods[:,waveframe]
 
-for k = (WL+1):(WL*nTσ - WL)
-    WaveIndices = wave_info.WavePeriods[k-WL:k+WL]
-    # change in total volume since initial
-    ΔVol_rWavg[:,k-WL] = mean(ΔVol[:,WaveIndices], dims=2)
-    # change in total concentration since initial
-    ΔConG_rWavg[:,k-WL] = mean(ΔConG[:,WaveIndices], dims=2)
-    ΔConS_rWavg[:,k-WL] = mean(ΔConS[:,WaveIndices], dims=2)
-    # average dye in n
-    Conavg_rWavg[:,k-WL] = mean(cavg[:,WaveIndices], dims=2)
-    # average dissip in n
-    eavg_rWavg[:,k-WL] = mean(eavg[:,WaveIndices], dims=2)
-    # total issipation
-    etot_rWavg[:,k-WL] = mean(etot[:,WaveIndices], dims=2)
+    ΔVol_Ph = ΔVol[:,end5waves];
+    ΔConG_Ph = ΔConG[:,end5waves];
+    ΔConS_Ph = ΔConS[:,end5waves];
+    etot_Ph = etot[:, end5waves];
 
+    ΔVol_Phavg = mean(ΔVol_Ph, dims = 5)[:,:,1];
+    ΔConG_Phavg = mean(ΔConG_Ph, dims = 5)[:,:,1];
+    ΔConS_Phavg = mean(ΔConS_Ph, dims = 5)[:,:,1];
+    etot_Phavg = mean(etot_Ph, dims = 5)[:,:,1];
+
+    return ΔVol_Phavg, ΔConG_Phavg, ΔConS_Phavg, etot_Phavg
 end
 
-# n = 1 is really at the top of the domain where b = 0
-# switch the ordering so n=1 is the deepest?
-reverse!(ΔVol_rWavg, dims=1)
-reverse!(ΔConG_rWavg, dims=1)
-reverse!(ΔConS_rWavg, dims=1)
-reverse!(Conavg_rWavg, dims=1)
-reverse!(eavg_rWavg, dims=1)
-reverse!(etot_rWavg, dims=1)
+(ΔVol_Phavg_full, ΔConG_Phavg_full, ΔConS_Phavg_full, etot_Phavg_full) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 7:10)
+(ΔVol_Phavg_full_b, ΔConG_Phavg_full_b, ΔConS_Phavg_full_b, etot_Phavg_full_b) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 1:3)
 
-# wave period times for rolling average
-rWtimes = b_timeseries.times[wave_info.WavePeriods[WL+1:WL*nTσ - WL]]/pm.Tσ
+(ΔVol_Phavg_1d, ΔConG_Phavg_1d, ΔConS_Phavg_1d, etot_Phavg_1d) = PhaseAveraging(wave_info, ΔVol_1d, ΔConG_1d, ΔConS_1d, etot_1d, 7:10)
+(ΔVol_Phavg_1d_b, ΔConG_Phavg_1d_b, ΔConS_Phavg_1d_b, etot_Phavg_1d_b) = PhaseAveraging(wave_info, ΔVol_1d, ΔConG_1d, ΔConS_1d, etot_1d, 1:3)
+
+(ΔVol_Phavg_025d, ΔConG_Phavg_025d, ΔConS_Phavg_025d, etot_Phavg_025d) = PhaseAveraging(wave_info, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d, 7:10)
+(ΔVol_Phavg_b, ΔConG_Phavg_025d_b, ΔConS_Phavg_025d_b, etot_Phavg_025d_b) = PhaseAveraging(wave_info, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d, 1:3)
+
+phase_times = b_timeseries.times[wave_info.WavePeriods[:,1]]/pm.Tσ
 
 # buoynacy classes
 # first index is the buoynacy found at lowest depth
 # last index is buoyancy found at top ie. (Δb/2)
 isos = Δb.*((ini_Nisos - .5):-1:0.5)
 
-eavg_rWavg_log = log10.(clamp.(eavg_rWavg, 1e-14, 1e-1))
-Conavg_rWavg_log = log10.(clamp.(Conavg_rWavg, 1e-14, 1e-1))
-etot_rWavg_log = log10.(clamp.(etot_rWavg, 1e-14, 1e-1))
+function phaseavg_volume_plot(phase_times, isos, ΔVol, ΔConG, ΔConS, etot, savename, apath,
+    vmax, cmaxG, cmaxS, emax)
+    f = Figure(resolution = (1600, 900), fontsize=26)
+    ga = f[1, 1] = GridLayout() 
 
-f = Figure(resolution = (1500, 900), fontsize=26)
-ga = f[1, 1] = GridLayout() 
+    # change in volume
+    axvdif = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
+                title = "ΔVol = Vol - Vol₀")
+    axesum = Axis(ga[1, 3],  title = "ε")
+    axcdifG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",
+                title = "Gauss Δc = ∑c - ∑c₀")
+    axcdifS = Axis(ga[2, 3], xlabel = "Wave Periods [Tσ]",
+                title = "Tanh Δc = ∑c - ∑c₀")
 
-# change in volume
-axvdif = Axis(ga[1, 1], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "ΔVol = Vol - Vol₀")
-axesum = Axis(ga[1, 3], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "∑ε")
-axeavg = Axis(ga[1, 4], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "⟨ε⟩")
+    axcdifG.xticks =  .2:.2:1
+    axcdifS.xticks =  .2:.2:1
 
-axcdifG = Axis(ga[2, 1], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "Gauss Δc = ∑c - ∑c₀")
-axcdifS = Axis(ga[2, 3], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "Tanh Δc = ∑c - ∑c₀")
-axcavg = Axis(ga[2, 4], ylabel = "nΔb [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",
-            title = "Tanh ⟨c⟩")
+    axvdif.yticks =   (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
+    axcdifG.yticks =  (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
 
-axcdifG.xticks =  1:2:10
-axcdifS.xticks =  1:2:10
-axcavg.xticks =  1:2:10
+    # vol  []     e tot   e avg []]
+    # c totG []]  c totS  c avg []
 
-axvdif.yticks =   (-5e-3:2e-3:-1e-3,  ["5×10⁻³", "3×10⁻³", "1×10⁻³"] )
-axcdifG.yticks =  (-5e-3:2e-3:-1e-3,  ["5×10⁻³", "3×10⁻³", "1×10⁻³"] )
+    limits!(axvdif, 0, 1, -5e-3, -1e-3)
+    limits!(axcdifS, 0, 1, -5e-3, -1e-3)
+    limits!(axcdifG, 0, 1, -5e-3, -1e-3)
+    limits!(axesum, 0, 1, -5e-3, -1e-3)
 
-# vol  []     e tot   e avg []]
-# c totG []]  c totS  c avg []
+    hidexdecorations!(axvdif)
+    hidedecorations!(axesum)
+    hideydecorations!(axcdifS)
 
-limits!(axvdif, 1, 10, isos[1], isos[end])
-limits!(axcdifS, 1, 10, isos[1], isos[end])
-limits!(axcdifG, 1, 10, isos[1], isos[end])
-limits!(axcavg, 1, 10, isos[1], isos[end])
-limits!(axesum, 1, 10, isos[1], isos[end])
-limits!(axeavg, 1, 10, isos[1], isos[end])
+    # just the slope values
+    hvdif = heatmap!(axvdif, phase_times, isos, ΔVol', colormap = :balance, colorrange = (-vmax, vmax))
+    hcGdif = heatmap!(axcdifG, phase_times, isos, ΔConG', colormap = :balance, colorrange = (-cmaxG, cmaxG))
+    hcSdif = heatmap!(axcdifS, phase_times, isos, ΔConS', colormap = :balance, colorrange = (-cmaxS, cmaxS))
+    hetot = heatmap!(axesum, phase_times, isos, etot', colormap = :thermal, colorrange = (0, emax))
 
-hidexdecorations!(axvdif)
-hidedecorations!(axesum)
-hidedecorations!(axeavg)
-hideydecorations!(axcdifS)
-hideydecorations!(axcavg)
+    vtic = (vmax/2)*1e-5
+    cticG = (cmaxG/2)*1e-4
+    cticS = (cmaxS/2)*1e-4
+    etic = (emax/2)
 
-hvdif = heatmap!(axvdif, rWtimes, isos, ΔVol_rWavg', colormap = :balance, colorrange = (-1.2e6, 1.2e6))
-hcGdif = heatmap!(axcdifG, rWtimes, isos, ΔConG_rWavg', colormap = :balance, colorrange = (-1.7e4, 1.7e4))
-hcSdif = heatmap!(axcdifS, rWtimes, isos, ΔConS_rWavg', colormap = :balance, colorrange = (-5.5e4, 5.5e4))
-hcavg = heatmap!(axcavg, rWtimes, isos, Conavg_rWavg', colormap = :thermal, colorrange = (0, 0.03))
-hetot = heatmap!(axesum, rWtimes, isos, etot_rWavg', colormap = :thermal, colorrange = (0, 0.08))
-heavg = heatmap!(axeavg, rWtimes, isos, eavg_rWavg', colormap = :thermal, colorrange = (0, 3e-7))
+    # create colorbars the size of the whole data set
+    cb1 = Colorbar(ga[1,2], hvdif, ticks = (-vmax/2:vmax/2:vmax/2, [@sprintf("-%0.1f×10⁵", vtic), "0", @sprintf("%0.1f×10⁵", vtic)] ),
+    size =25)
+    cb2 = Colorbar(ga[2,2], hcGdif, ticks = (-cmaxG/2:cmaxG/2:cmaxG/2, [@sprintf("-%0.1f×10⁴", cticG), "0", @sprintf("%0.1f×10⁴", cticG)] ), 
+    size =25)
+    cb3 = Colorbar(ga[1,4], hetot, ticks = (0:etic:2*etic),
+    size =25)
+    cb4 = Colorbar(ga[2,4], hcSdif, ticks = (-cmaxS/2:cmaxS/2:cmaxS/2, [@sprintf("-%0.1f×10⁴", cticS), "0", @sprintf("%0.1f×10⁴", cticS)] ), 
+    size =25)
 
-# create colorbars the size of the whole data set
-cb1 = Colorbar(ga[1,2], hvdif, ticks = (-1e6:1e6:1e6, ["-10⁶", "0", "10⁶"] ),
-size =25, flipaxis=false, label = "ΔVol")
+    colsize!(ga, 2, Relative(0.01))
+    colsize!(ga, 4, Relative(0.01))
 
-cb5 = Colorbar(ga[1,5], hetot, ticks = (0:0.02:0.06),
- size =25, label = "∑ε", flipaxis=false)
-cb6 = Colorbar(ga[1,5], heavg, ticks = (0:1e-7:3e-7,  ["0", "1×10⁻⁷", "2×10⁻⁷","3×10⁻⁷"]),
- size =25, label = "⟨ε⟩")
+    rowgap!(ga, 8)
 
-cb2 = Colorbar(ga[2,2], hcGdif, ticks = (-1e4:1e4:1e4, ["-10⁴", "0", "10⁴"] ), 
-size =25, label = "Gauss Δc", flipaxis=false)
-cb3 = Colorbar(ga[2,2], hcSdif, ticks = (-5e4:5e4:5e4, ["-5×10⁴", "0", "5×10⁴"] ), 
-size =25, label = "Δc × 10⁻⁵")
+    save(apath * savename * ".png", f)
 
-cb4 = Colorbar(ga[2,5], hcavg, ticks = (0:.01:.03 ), 
-size =25, label = "⟨c⟩")
+end
 
-colsize!(ga, 2, Relative(0.01))
-colsize!(ga, 5, Relative(0.01))
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_1d, ΔConG_Phavg_1d, ΔConS_Phavg_1d, etot_Phavg_1d,
+ "bClasses_slopeend_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 5e5, 1e4, 4e4, 0.05)
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_1d_b, ΔConG_Phavg_1d_b, ΔConS_Phavg_1d_b, etot_Phavg_1d_b,
+ "bClasses_slopebeg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 2e5, 5e3, 2e4, 0.05)
 
-bigtitle = @sprintf("Buoyancy Space Analysis, U₀=%0.2f, N=%0.2f ×10⁻³, δ=%0.1f", pm.U₀, pm.Ñ*1e3, pm.U₀/pm.Ñ)
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full, ΔConG_Phavg_full, ΔConS_Phavg_full, etot_Phavg_full,
+ "bClasses_end_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 7e5, 5e4, 5e4, 0.05)
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_b, ΔConG_Phavg_full_b, ΔConS_Phavg_full_b, etot_Phavg_full_b,
+ "bClasses_beg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 4e5, 2e4, 2e4, 0.05)
 
-Label(f[1, 1, Top()],bigtitle, valign = :bottom,
-    font = :bold, fontsize = 30,
-    padding = (0, 0, 50, 0))
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_025d, ΔConG_Phavg_025d, ΔConS_Phavg_025d, etot_Phavg_025d,
+ "bClasses_025d_end_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 5e4, 5e3, 5e4, 0.05)
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_b, ΔConG_Phavg_025d_b, ΔConS_Phavg_025d_b, etot_Phavg_025d_b,
+ "bClasses_025d_beg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 1e4, 1e3, 5e3, 0.002)
 
-rowgap!(ga, 10)
+function WaveAveraging(wave_info, ΔVol, ΔConG, ΔConS, etot)
+    WL = wave_info.Wl
+    nTσ = wave_info.nTσ
 
-savename = "bClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname
+    Wtlength = length(WL+1:WL*nTσ-WL)
 
-save(apath * savename * ".png", f)
+    # volume change since initial
+    ΔVol_rWavg = zeros(ini_Nisos, Wtlength)
+    # change in total concentration since initial
+    ΔConG_rWavg = zeros(ini_Nisos, Wtlength)
+    ΔConS_rWavg = zeros(ini_Nisos, Wtlength)
+    # total dissipation
+    etot_rWavg = zeros(ini_Nisos, Wtlength)
 
+    for k = (WL+1):(WL*nTσ - WL)
+        WaveIndices = wave_info.WavePeriods[k-WL:k+WL]
+        # change in total volume since initial
+        ΔVol_rWavg[:,k-WL] = mean(ΔVol[:,WaveIndices], dims=2)
+        # change in total concentration since initial
+        ΔConG_rWavg[:,k-WL] = mean(ΔConG[:,WaveIndices], dims=2)
+        ΔConS_rWavg[:,k-WL] = mean(ΔConS[:,WaveIndices], dims=2)
+        # total issipation
+        etot_rWavg[:,k-WL] = mean(etot[:,WaveIndices], dims=2)
+
+    end
+    return ΔVol_rWavg, ΔConG_rWavg, ΔConS_rWavg, etot_rWavg
+end
+
+(ΔVol_rWavg_full, ΔConG_rWavg_full, ΔConS_rWavg_full, etot_rWavg_full) = WaveAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full)
+(ΔVol_rWavg_025d, ΔConG_rWavg_025d, ΔConS_rWavg_025d, etot_rWavg_025d) = WaveAveraging(wave_info, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d)
+
+# wave period times for rolling average
+rWtimes = b_timeseries.times[wave_info.WavePeriods[WL+1:WL*nTσ - WL]]/pm.Tσ
+
+function volume_plot(times, isos, ΔVol, ΔConG, ΔConS, etot, savename, apath,
+    vmax, cmaxG, cmaxS, emax)
+    f = Figure(resolution = (1600, 900), fontsize=26)
+    ga = f[1, 1] = GridLayout() 
+
+    # change in volume
+    axvdif = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
+                title = "ΔVol = Vol - Vol₀")
+    axesum = Axis(ga[1, 3],  title = "ε")
+    axcdifG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",
+                title = "Gauss Δc = ∑c - ∑c₀")
+    axcdifS = Axis(ga[2, 3], xlabel = "Wave Periods [Tσ]",
+                title = "Tanh Δc = ∑c - ∑c₀")
+
+    axcdifG.xticks =  2:2:10
+    axcdifS.xticks =  2:2:10
+
+    axvdif.yticks =   (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
+    axcdifG.yticks =  (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
+
+    # vol  []     e tot   e avg []]
+    # c totG []]  c totS  c avg []
+
+    limits!(axvdif, 0, 11, -5e-3, -1e-3)
+    limits!(axcdifS, 0, 11, -5e-3, -1e-3)
+    limits!(axcdifG, 0, 11, -5e-3, -1e-3)
+    limits!(axesum, 0, 11, -5e-3, -1e-3)
+
+    hidexdecorations!(axvdif)
+    hidedecorations!(axesum)
+    hideydecorations!(axcdifS)
+
+    # just the slope values
+    hvdif = heatmap!(axvdif, times, isos, ΔVol', colormap = :balance, colorrange = (-vmax, vmax))
+    hcGdif = heatmap!(axcdifG, times, isos, ΔConG', colormap = :balance, colorrange = (-cmaxG, cmaxG))
+    hcSdif = heatmap!(axcdifS, times, isos, ΔConS', colormap = :balance, colorrange = (-cmaxS, cmaxS))
+    hetot = heatmap!(axesum, times, isos, etot', colormap = :thermal, colorrange = (0, emax))
+
+    vtic = (vmax/2)*1e-5
+    cticG = (cmaxG/2)*1e-4
+    cticS = (cmaxS/2)*1e-4
+    etic = (emax/2)
+
+    # create colorbars the size of the whole data set
+    cb1 = Colorbar(ga[1,2], hvdif, ticks = (-vmax/2:vmax/2:vmax/2, [@sprintf("-%0.1f×10⁵", vtic), "0", @sprintf("%0.1f×10⁵", vtic)] ),
+    size =25)
+    cb2 = Colorbar(ga[2,2], hcGdif, ticks = (-cmaxG/2:cmaxG/2:cmaxG/2, [@sprintf("-%0.1f×10⁴", cticG), "0", @sprintf("%0.1f×10⁴", cticG)] ), 
+    size =25)
+    cb3 = Colorbar(ga[1,4], hetot, ticks = (0:etic:2*etic),
+    size =25)
+    cb4 = Colorbar(ga[2,4], hcSdif, ticks = (-cmaxS/2:cmaxS/2:cmaxS/2, [@sprintf("-%0.1f×10⁴", cticS), "0", @sprintf("%0.1f×10⁴", cticS)] ), 
+    size =25)
+
+    colsize!(ga, 2, Relative(0.01))
+    colsize!(ga, 4, Relative(0.01))
+
+    rowgap!(ga, 8)
+
+    save(apath * savename * ".png", f)
+end
+
+volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 
+"bClasses_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+1.5e6, 1.5e4, 7.5e4, 0.08)
+
+volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d, 
+"bClasses_025d_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+5e5, 2e4, 5e4, 0.06)
+
+function waveavg_volume_plot(rWtimes, isos, ΔVol_rWavg, ΔConG_rWavg, ΔConS_rWavg, etot_rWavg, savename, apath,
+    vmax, cmaxG, cmaxS, emax)
+    f = Figure(resolution = (1600, 900), fontsize=26)
+    ga = f[1, 1] = GridLayout() 
+
+    # change in volume
+    axvdif = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
+                title = "ΔVol = Vol - Vol₀")
+    axesum = Axis(ga[1, 3], ylabel = "Buoyancy [ms⁻²]", 
+                title = "ε")
+    axcdifG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",
+                title = "Gauss Δc = ∑c - ∑c₀")
+    axcdifS = Axis(ga[2, 3], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",
+                title = "Tanh Δc = ∑c - ∑c₀")
+
+    axcdifG.xticks =  2:2:10
+    axcdifS.xticks =  2:2:10
+
+    axvdif.yticks =   (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
+    axcdifG.yticks =  (-4e-3:1e-3:-2e-3,  ["-4×10⁻³", "-3×10⁻³", "-2×10⁻³"] )
+
+    # vol  []     e tot   e avg []]
+    # c totG []]  c totS  c avg []
+
+    limits!(axvdif, 1, 10, -5e-3, -1e-3)
+    limits!(axcdifS, 1, 10, -5e-3, -1e-3)
+    limits!(axcdifG, 1, 10, -5e-3, -1e-3)
+    limits!(axesum, 1, 10, -5e-3, -1e-3)
+
+    hidexdecorations!(axvdif)
+    hidedecorations!(axesum)
+    hideydecorations!(axcdifS)
+
+    hvdif = heatmap!(axvdif, rWtimes, isos, ΔVol_rWavg', colormap = :balance, colorrange = (-vmax, vmax))
+    hcGdif = heatmap!(axcdifG, rWtimes, isos, ΔConG_rWavg', colormap = :balance, colorrange = (-cmaxG, cmaxG))
+    hcSdif = heatmap!(axcdifS, rWtimes, isos, ΔConS_rWavg', colormap = :balance, colorrange = (-cmaxS, cmaxS))
+    hetot = heatmap!(axesum, rWtimes, isos, etot_rWavg', colormap = :thermal, colorrange = (0, emax))
+
+    vtic = (vmax/2)*1e-5
+    cticG = (cmaxG/2)*1e-4
+    cticS = (cmaxS/2)*1e-4
+    etic = (emax/2)
+
+    # create colorbars the size of the whole data set
+    cb1 = Colorbar(ga[1,2], hvdif, ticks = (-vmax/2:vmax/2:vmax/2, [@sprintf("-%0.1f×10⁵", vtic), "0", @sprintf("%0.1f×10⁵", vtic)] ),
+    size =25)
+    cb2 = Colorbar(ga[2,2], hcGdif, ticks = (-cmaxG/2:cmaxG/2:cmaxG/2, [@sprintf("-%0.1f×10⁴", cticG), "0", @sprintf("%0.1f×10⁴", cticG)] ), 
+    size =25)
+    cb3 = Colorbar(ga[1,4], hetot, ticks = (0:etic:2*etic),
+    size =25)
+    cb4 = Colorbar(ga[2,4], hcSdif, ticks = (-cmaxS/2:cmaxS/2:cmaxS/2, [@sprintf("-%0.1f×10⁴", cticS), "0", @sprintf("%0.1f×10⁴", cticS)] ), 
+    size =25)
+
+    colsize!(ga, 2, Relative(0.01))
+    colsize!(ga, 4, Relative(0.01))
+
+    rowgap!(ga, 8)
+
+    save(apath * savename * ".png", f)
+end
+
+waveavg_volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_rWavg, ΔConG_rWavg, ΔConS_rWavg, etot_rWavg, 
+"bClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+1e6, 1.5e4, 5.5e4, 0.04)
+
+waveavg_volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_rWavg_025d, ΔConG_rWavg_025d, ΔConS_rWavg_025d, etot_rWavg_025d, 
+"bClasses_rWavg_025d_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+5e5, 2e4, 5.5e4, 0.04)
 
 #########################
 #                   BOUYANCY dM/dB Calculation
@@ -281,6 +517,7 @@ ini_Nisos = 250
 M_btG = zeros(ini_Nisos, tlength)
 M_btS = zeros(ini_Nisos, tlength)
 M_btGr = zeros(ini_Nisos, tlength)
+
 for i = 1:tlength
     @info "Time $i of $tlength..."
     # at each time step get the data at (x,ycut,z)
