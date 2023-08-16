@@ -212,6 +212,10 @@ include("WaveValues.jl")
 
 wave_info=get_wave_indices(b_timeseries, pm, tlength)
 
+#########################
+#                   Phase Averaging Buoyancy Bins
+#########################
+
 function PhaseAveraging(wave_info, ΔVol, ΔConG, ΔConS, etot, waveframe)
     #####################
     # Phase averaging 
@@ -330,6 +334,10 @@ phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_025d, ΔConG_Phavg_025d, ΔC
 phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_b, ΔConG_Phavg_025d_b, ΔConS_Phavg_025d_b, etot_Phavg_025d_b,
  "bClasses_025d_beg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
  1e4, 1e3, 5e3, 0.002)
+
+#########################
+#                   Wave averaging Volume Plots
+#########################
 
 function WaveAveraging(wave_info, ΔVol, ΔConG, ΔConS, etot)
     WL = wave_info.Wl
@@ -513,34 +521,73 @@ waveavg_volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_rWavg_025d, ΔConG_r
 ini_Nisos = 250
 Δb = -500*pm.Ñ^2/ini_Nisos
 
-@info "Calculating isopycnal volume..."
-M_btG = zeros(ini_Nisos, tlength)
-M_btS = zeros(ini_Nisos, tlength)
-M_btGr = zeros(ini_Nisos, tlength)
+spinlength = length(Cgl_timeseries.times)
 
-for i = 1:tlength
-    @info "Time $i of $tlength..."
-    # at each time step get the data at (x,ycut,z)
-    bi = Bi[:,:, :, i];
-    #Cgi = CGi[:,:,:, i];
-    #Cgri = CGri[:,:,:, i];
-    Csi = CSi[:,:,:, i];
+function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGli, CSi)
+   
+    @info "Calculating isopycnal volume..."
+    M_btG = zeros(ini_Nisos, tlength)
+    M_btS = zeros(ini_Nisos, tlength)
+    M_btGr = zeros(ini_Nisos, tlength)
+    M_btGl = zeros(ini_Nisos, spinlength)
 
-    # for each buoyancy class:
-    for n = 1:ini_Nisos
-        # (1) CCC locations in the density class
-        # starting with b < 0 should be almost the whole domain
-        boolB = (bi.< Δb*(n-1))
-        # dye within the isopycnal layer
-        #cG_inb = Cgi[boolB]
-        #cGr_inb = Cgri[boolB]
-        cS_inb = Csi[boolB]
-        # volume integrated dye concentration:
-        #M_btG[n,i] = sum(cG_inb)*16
-        #M_btGr[n,i] = sum(cGr_inb)*16
-        M_btS[n,i] = sum(cS_inb)*16
+    prelength = tlength - spinlength
+
+    for i = 1:prelength
+        @info "Time $i of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bi = Bi[:,:, :, i];
+        Cgi = CGi[:,:,:, i];
+        Cgri = CGri[:,:,:, i];
+        Csi = CSi[:,:,:, i];
+
+        # for each buoyancy class:
+        for n = nrange
+            # (1) CCC locations in the density class
+            # starting with b < 0 should be almost the whole domain
+            boolB = (bi.< Δb*(n-1))
+            # dye within the isopycnal layer
+            cG_inb = Cgi[boolB]
+            cGr_inb = Cgri[boolB]
+            cS_inb = Csi[boolB]
+            # volume integrated dye concentration:
+            M_btG[n,i] = sum(cG_inb)*16
+            M_btGr[n,i] = sum(cGr_inb)*16
+            M_btS[n,i] = sum(cS_inb)*16
+        end
     end
+
+    for i = prelength+1:tlength
+        @info "Time $i of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bi = Bi[:,:, :, i];
+        Cgi = CGi[:,:,:, i];
+        Cgri = CGri[:,:,:, i];
+        Csi = CSi[:,:,:, i];
+        Cgli = CGli[:,:,:, i - prelength];
+
+        # for each buoyancy class:
+        for n = nrange
+            # (1) CCC locations in the density class
+            # starting with b < 0 should be almost the whole domain
+            boolB = (bi.< Δb*(n-1))
+            # dye within the isopycnal layer
+            cG_inb = Cgi[boolB]
+            cGr_inb = Cgri[boolB]
+            cGl_inb = Clri[boolB]
+            cS_inb = Csi[boolB]
+            # volume integrated dye concentration:
+            M_btG[n,i] = sum(cG_inb)*16
+            M_btGr[n,i] = sum(cGr_inb)*16
+            M_btGl[n,i - prelength] = sum(cGl_inb)*16
+            M_btS[n,i] = sum(cS_inb)*16
+        end
+    end
+
+    return M_btG, M_btGr, M_btGl, M_btS
 end
+
+(M_btG, M_btGr, M_btGl, M_btS) = dMdb_Concetration_Calc(ini_Nisos, 1:ini_Nisos, tlength, spinlength, Bi, CGi, CGri, CGli, CSi)
 
 Δt = b_timeseries.times[2] - b_timeseries.times[1]
 
@@ -561,28 +608,153 @@ end
 
 (M_btG, ∂_∂M∂b_∂tG, ∂M∂bG, Δ∂M∂bG) = dMdb_Concetration_Calc(M_btG,  Δb, Δt)
 (M_btGr, ∂_∂M∂b_∂tGr, ∂M∂bGr, Δ∂M∂bGr) = dMdb_Concetration_Calc(M_btGr,  Δb, Δt)
+(M_btGl, ∂_∂M∂b_∂tGl, ∂M∂bGl, Δ∂M∂bGl) = dMdb_Concetration_Calc(M_btGl,  Δb, Δt)
 (M_btS, ∂_∂M∂b_∂tS, ∂M∂bS, Δ∂M∂bS) = dMdb_Concetration_Calc(M_btS,  Δb, Δt)
 
 include("WaveValues.jl")
 wave_info=get_wave_indices(b_timeseries, pm, tlength)
-# total number of data points
-Wtlength = wave_info.Wl * wave_info.nTσ
-# rolling wave avg
-hWl = floor(Int, wave_info.Wl/2)
 
-∂_∂M∂b_∂tS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
-∂M∂bS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
-Δ∂M∂bS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
-wtims = b_timeseries.times[wave_info.WavePeriods[hWl+1:Wtlength-hWl]]
-for (i,l) in enumerate(hWl+1:Wtlength-hWl-1)
-    wdxs = wave_info.WavePeriods[l-hWl:l+hWl]
-    ∂_∂M∂b_∂tS_rW[:,i] = mean(∂_∂M∂b_∂tS[:,wdxs], dims=2)[:,1]
-    ∂M∂bS_rW[:,i] = mean(∂M∂bS[:,wdxs], dims=2)[:,1]
-    Δ∂M∂bS_rW[:,i] = mean(Δ∂M∂bS[:,wdxs], dims=2)[:,1]
+function WaveAveraging(wave_info, ini_Nisos, ∂_∂M∂b_∂tS, ∂M∂bS, Δ∂M∂bS)
+
+    # total number of data points
+    Wtlength = wave_info.Wl * wave_info.nTσ
+    # rolling wave avg
+    hWl = floor(Int, wave_info.Wl/2)
+
+    ∂_∂M∂b_∂tS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
+    ∂M∂bS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
+    Δ∂M∂bS_rW = zeros(ini_Nisos-1, Wtlength-2*hWl)
+    wtims = b_timeseries.times[wave_info.WavePeriods[hWl+1:Wtlength-hWl]]
+
+    for (i,l) in enumerate(hWl+1:Wtlength-hWl-1)
+        wdxs = wave_info.WavePeriods[l-hWl:l+hWl]
+        ∂_∂M∂b_∂tS_rW[:,i] = mean(∂_∂M∂b_∂tS[:,wdxs], dims=2)[:,1]
+        ∂M∂bS_rW[:,i] = mean(∂M∂bS[:,wdxs], dims=2)[:,1]
+        Δ∂M∂bS_rW[:,i] = mean(Δ∂M∂bS[:,wdxs], dims=2)[:,1]
+    end
+
+    return ∂_∂M∂b_∂tS_rW, ∂M∂bS_rW, Δ∂M∂bS_rW, wtims
 end
+
+(∂_∂M∂b_∂tG_rW, ∂M∂bG_rW, Δ∂M∂bG_rW, wtims) = WaveAveraging(wave_info, ini_Nisos, ∂_∂M∂b_∂tG, ∂M∂bG, Δ∂M∂bG)
+(∂_∂M∂b_∂tGr_rW, ∂M∂bGr_rW, Δ∂M∂bGr_rW, _) = WaveAveraging(wave_info, ini_Nisos, ∂_∂M∂b_∂tGr, ∂M∂bGr, Δ∂M∂bGr)
+(∂_∂M∂b_∂tS_rW, ∂M∂bS_rW, Δ∂M∂bS_rW, _) = WaveAveraging(wave_info, ini_Nisos, ∂_∂M∂b_∂tS, ∂M∂bS, Δ∂M∂bS)
 
 isos = Δb.*((ini_Nisos - 0.5):-1:0.5)
 isosdb = Δb.*((ini_Nisos - 1.5):-1:0.5)
+
+function dMdb_SlopeGauss_plot(times, isos, ∂M∂bG, ∂_∂M∂b_∂tG, Δ∂M∂bG, ∂M∂bS, ∂_∂M∂b_∂tS, Δ∂M∂bS,
+    ∂M∂bG_bounds, ∂_∂M∂b_∂tG_bounds, Δ∂M∂bG_bounds, ∂M∂bS_bounds, ∂_∂M∂b_∂tS_bounds, Δ∂M∂bS_bounds,
+    ∂M∂bG_ticks, ∂_∂M∂b_∂tG_ticks, Δ∂M∂bG_ticks, ∂M∂bS_ticks, ∂_∂M∂b_∂tS_ticks, Δ∂M∂bS_ticks,
+    savename, apath)
+    f = Figure(resolution = (1000, 1100), fontsize=26)
+    ga = f[1, 1] = GridLayout() 
+    
+    # change in volume
+    axMdbpG = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    axMdbpS = Axis(ga[1, 2], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    axdtMpG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    axdtMpS = Axis(ga[2, 2], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    axdMpG = Axis(ga[3, 1], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    axdMpS = Axis(ga[3, 2], ylabel = "Buoyancy [ms⁻²]", 
+                xlabel = "Wave Periods [Tσ]",)
+    
+    Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :bottom,
+    font = :bold, fontsize = 25,
+    padding = (0, 0, 5, 0))
+    
+    Label(ga[2, 1:2, Top()],"Diapycnal Transport ∂(∂M/∂b)/∂t", valign = :bottom,
+        font = :bold, fontsize = 25,
+        padding = (0, 0, 5, 0))
+    
+    Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :bottom,
+    font = :bold, fontsize = 25,
+    padding = (0, 0, 5, 0))
+    axdMpG.xticks =  2:2:10
+    axdMpS.xticks =  2:2:10
+    
+    axMdbpG.yticks =  -6*1e-3:2e-3:0
+    axdtMpG.yticks =  -6*1e-3:2e-3:0
+    axdMpG.yticks =  -6*1e-3:2e-3:0
+    
+    limits!(axMdbpG, 1, 10, -5e-3, -1e-3)
+    limits!(axMdbpS, 1, 10, -5e-3, -1e-3)
+    limits!(axdtMpG, 1, 10, -5e-3, -1e-3)
+    limits!(axdtMpS, 1, 10, -5e-3, -1e-3)
+    limits!(axdMpG, 1, 10, -5e-3, -1e-3)
+    limits!(axdMpS, 1, 10, -5e-3, -1e-3)
+    
+    hidexdecorations!(axMdbpG)
+    hidexdecorations!(axdtMpG)
+    hidedecorations!(axMdbpS)
+    hidedecorations!(axdtMpS)
+    hideydecorations!(axdMpS)
+        
+    hMG = heatmap!(axMdbpG, times, isos, ∂M∂bG', colormap = :tempo, colorrange = ∂M∂bG_bounds)
+    hMS = heatmap!(axMdbpS, times, isos, ∂M∂bS', colormap = :tempo, colorrange = ∂M∂bS_bounds)
+    hdtMG = heatmap!(axdtMpG, times, isos, ∂_∂M∂b_∂tG', colormap = :balance, colorrange = ∂_∂M∂b_∂tG_bounds)
+    hdtMS = heatmap!(axdtMpS, times, isos, ∂_∂M∂b_∂tS', colormap = :balance, colorrange = ∂_∂M∂b_∂tS_bounds)
+    hdMG = heatmap!(axdMpG, times, isos, Δ∂M∂bG', colormap = :balance, colorrange = Δ∂M∂bG_bounds)
+    hdMS = heatmap!(axdMpS, times, isos, Δ∂M∂bS', colormap = :balance, colorrange = Δ∂M∂bS_bounds)
+
+    Label(ga[1, 3, Top()],"Gaussian", valign = :bottom,
+    font = :bold, fontsize = 25, halign = :right,
+    padding = (-5, 0, 5, 0))
+
+    Label(ga[1, 3, Top()],"Hyperbolic\nTangent", valign = :bottom,
+    font = :bold, fontsize = 25, halign = :left,
+    padding = (5, 0, 5, 0))
+
+    # create colorbars the size of the whole data set
+    cb1 = Colorbar(ga[1,3], hMG, ticks = ∂M∂bG_ticks,
+    size =25, flipaxis=false)
+    cb2 = Colorbar(ga[1,3], hMS, ticks = ∂M∂bS_ticks,
+    size =25)
+
+    cb3 = Colorbar(ga[2,3], hdtMG, ticks = ∂_∂M∂b_∂tG_ticks, 
+    size =25, flipaxis=false)
+    cb4 = Colorbar(ga[2,3], hdtMS, ticks = ∂_∂M∂b_∂tS_ticks, 
+    size =25)
+
+    cb5 = Colorbar(ga[3,3], hdMG, ticks = Δ∂M∂bG_ticks,
+    size =25,  flipaxis=false)
+    cb6 = Colorbar(ga[3,3], hdMS, ticks = Δ∂M∂bS_ticks,
+    size =25)
+
+    colsize!(ga, 3, Relative(0.03))
+
+    save(apath * savename * ".png", f, px_per_unit = 2)
+end
+
+#########################
+#                   FULL BOUYANCY dM/dB PLOT
+#########################
+# dMdb is in decsending order by class number but backwards buoynacy order
+
+∂M∂bG_bounds = (0, 1.5e8)
+∂M∂bS_bounds = (0, 1e9)
+∂_∂M∂b_∂tG_bounds = (-7e4, 7e4)
+∂_∂M∂b_∂tS_bounds = (-5e5, 5e5)
+Δ∂M∂bG = (-2e8, 2e8)
+Δ∂M∂bS = (-4e8, 4e8)
+
+# create colorbars the size of the whole data set
+∂M∂bG_ticks = (0:5e7:1e8, ["0", "5×10⁷","1×10⁸"] )
+∂M∂bS_ticks = (0:5e8:1e9, ["0", "5×10⁸","1×10⁹"] )
+∂_∂M∂b_∂tG_ticks = (-3e4:3e4:3e4, ["-3×10⁴", "0", "3×10⁴"] )
+∂_∂M∂b_∂tS_ticks = (-3e5:3e5:3e5,  ["-3×10⁵", "0", "3×10⁵"] )
+Δ∂M∂bG_ticks = (-1e8:1e8:1e8,  ["-10⁸", "0", "10⁸"] )
+Δ∂M∂bS_ticks = (-2e8:2e8:2e8,  ["-2×10⁸", "0", "2×10⁸"] )
+
+dMdb_SlopeGauss_plot(wtims./pm.Tσ, isosdb, ∂M∂bG_rW, ∂_∂M∂b_∂tG_rW, Δ∂M∂bG, ∂M∂bS_rW, ∂_∂M∂b_∂tS_rW, Δ∂M∂bS_rW,
+    ∂M∂bG_bounds, ∂_∂M∂b_∂tG_bounds, Δ∂M∂bG_bounds, ∂M∂bS_bounds, ∂_∂M∂b_∂tS_bounds, Δ∂M∂bS_bounds,
+    ∂M∂bG_ticks, ∂_∂M∂b_∂tG_ticks, Δ∂M∂bG_ticks, ∂M∂bS_ticks, ∂_∂M∂b_∂tS_ticks, Δ∂M∂bS_ticks,
+    "MbClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname, apath)
 
 #########################
 #                   CLOSE UP BOUYANCY dM/dB Calculation
@@ -591,30 +763,7 @@ isosdb = Δb.*((ini_Nisos - 1.5):-1:0.5)
 cut_ini_Nisos = 46
 Δb = -500*pm.Ñ^2/ini_Nisos
 
-@info "Calculating isopycnal volume..."
-M_btG_cut = zeros(cut_ini_Nisos, tlength)
-M_btS_cut = zeros(cut_ini_Nisos, tlength)
-
-for i = 1:tlength
-    @info "Time $i of $tlength..."
-    # at each time step get the data at (x,ycut,z)
-    bi = Bi[:,:, :, i];
-    Cgi = CGi[:,:,:, i];
-    Csi = CSi[:,:,:, i];
-
-    # for each buoyancy class:
-    for n = 120:165
-        # (1) CCC locations in the density class
-        # starting with b < 0 should be almost the whole domain
-        boolB = (bi.< Δb*(n-1))
-        # dye within the isopycnal layer
-        cG_inb = Cgi[boolB]
-        cS_inb = Csi[boolB]
-        # volume integrated dye concentration:
-        M_btG_cut[n-119,i] = sum(cG_inb)*16
-        M_btS_cut[n-119,i] = sum(cS_inb)*16
-    end
-end
+(M_btG_cut, M_btGr_cut, M_btS_cut) = dMdb_Concetration_Calc(cut_ini_Nisos, 120:165, tlength, Bi, CGi, CGri, CSi)
 
 (M_btG_cut, ∂_∂M∂b_∂tG_cut, ∂M∂bG_cut, Δ∂M∂bG_cut) = dMdb_Concetration_Calc(M_btG_cut,  Δb, Δt)
 (M_btS_cut, ∂_∂M∂b_∂tS_cut, ∂M∂bS_cut, Δ∂M∂bS_cut) = dMdb_Concetration_Calc(M_btS_cut,  Δb, Δt)
@@ -622,90 +771,24 @@ end
 isos_cut = Δb.*((165 - 0.5):-1:(120-0.5))
 isosdb_cut = Δb.*((165 - 1.5):-1:(120-0.5))
 
-f = Figure(resolution = (1100, 900), fontsize=26)
-ga = f[1, 1] = GridLayout() 
+∂M∂bG_cutbounds = (2e7, 8e7)
+∂M∂bS_cutbounds = (2e8, 8e8)
+∂_∂M∂b_∂tG_cutbounds = (-2e4, 2e4)
+∂_∂M∂b_∂tS_cutbounds = (-2e5, 2e5)
+Δ∂M∂bG_cutbounds = (-1.5e8, 1.5e8)
+Δ∂M∂bS_cutbounds = (-1.5e8, 1.5e8)
 
-# change in volume
-axMdbpG = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axMdbpS = Axis(ga[1, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpS = Axis(ga[2, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpG = Axis(ga[3, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpS = Axis(ga[3, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
+∂M∂bG_cutticks = (3e7:3e7:6e7, ["3×10⁷","6×10⁷"] )
+∂M∂bS_cutticks = (3e8:3e8:6e8, ["3×10⁸","6×10⁸"] )
+∂_∂M∂b_∂tG_cutticks = (-1e4:1e4:1e4, ["-1×10⁴", "0", "1×10⁴"] )
+∂_∂M∂b_∂tS_cutticks = (-1e5:1e5:1e5,  ["-1×10⁵", "0", "1×10⁵"] ) 
+Δ∂M∂bG_cutticks = (-1e8:1e8:1e8,  ["-1×10⁸", "0", "1×10⁸"] )
+Δ∂M∂bG_cutticks = (-1e8:1e8:1e8,  ["-1×10⁸", "0", "1×10⁸"] )
 
-Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :bottom,
-font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
-
-Label(ga[2, 1:2, Top()],"Diapycnal Transport ∂(∂M/∂b)/∂t", valign = :bottom,
-    font = :bold, fontsize = 25,
-    padding = (0, 0, 5, 0))
-
-Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :bottom,
-font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
-axdMpG.xticks =  4:2:10
-axdMpS.xticks =  4:2:10
-
-axMdbpG.yticks =  (-3.75*1e-3:0.5*1e-3:-3e-3, ["-3.75×10⁻³", "-3.25×10⁻³"])
-axdtMpG.yticks =  (-3.75*1e-3:0.5*1e-3:-3e-3, ["-3.75×10⁻³", "-3.25×10⁻³"])
-axdMpG.yticks =  (-3.75*1e-3:0.5*1e-3:-3e-3, ["-3.75×10⁻³", "-3.25×10⁻³"])
-
-limits!(axMdbpG, 3, 10, -4e-3, -3e-3)
-limits!(axMdbpS, 3, 10, -4e-3, -3e-3)
-limits!(axdtMpG, 3, 10, -4e-3, -3e-3)
-limits!(axdtMpS, 3, 10, -4e-3, -3e-3)
-limits!(axdMpG, 3, 10, -4e-3, -3e-3)
-limits!(axdMpS, 3, 10, -4e-3, -3e-3)
-
-hidexdecorations!(axMdbpG)
-hidexdecorations!(axdtMpG)
-hidedecorations!(axMdbpS)
-hidedecorations!(axdtMpS)
-hideydecorations!(axdMpS)
-
-hMG = heatmap!(axMdbpG, b_timeseries.times./pm.Tσ, isosdb_cut, ∂M∂bG_cut', colormap = :tempo, colorrange = (2e7, 8e7))
-hMS = heatmap!(axMdbpS, b_timeseries.times./pm.Tσ, isosdb_cut, ∂M∂bS_cut', colormap = :tempo, colorrange = (2e8, 8e8))
-hdtMG = heatmap!(axdtMpG , b_timeseries.times./pm.Tσ, isosdb_cut, ∂_∂M∂b_∂tG_cut', colormap = :balance, colorrange = (-2e4, 2e4))
-hdtMS = heatmap!(axdtMpS, b_timeseries.times./pm.Tσ, isosdb_cut, ∂_∂M∂b_∂tS_cut', colormap = :balance, colorrange = (-2e5, 2e5))
-hdMG = heatmap!(axdMpG, b_timeseries.times./pm.Tσ, isosdb_cut, Δ∂M∂bG_cut', colormap = :balance, colorrange = (-1.5e8, 1.5e8))
-hdMS = heatmap!(axdMpS, b_timeseries.times./pm.Tσ, isosdb_cut, Δ∂M∂bS_cut', colormap = :balance, colorrange = (-1.5e8, 1.5e8))
-
-Label(ga[1, 3, Top()],"Gaussian", valign = :bottom,
-font = :bold, fontsize = 25, halign = :right,
-padding = (-5, 0, 5, 0))
-
-Label(ga[1, 3, Top()],"Hyperbolic\nTangent", valign = :bottom,
-font = :bold, fontsize = 25, halign = :left,
-padding = (5, 0, 5, 0))
-
-# create colorbars the size of the whole data set
-cb1 = Colorbar(ga[1,3], hMG, ticks = (3e7:3e7:6e7, ["3×10⁷","6×10⁷"] ),
-size =25, flipaxis=false)
-cb2 = Colorbar(ga[1,3], hMS, ticks = (3e8:3e8:6e8, ["3×10⁸","6×10⁸"] ),
-size =25)
-
-cb3 = Colorbar(ga[2,3], hdtMG, ticks = (-1e4:1e4:1e4, ["-1×10⁴", "0", "1×10⁴"] ), 
-size =25, flipaxis=false)
-cb4 = Colorbar(ga[2,3], hdtMS, ticks = (-1e5:1e5:1e5,  ["-1×10⁵", "0", "1×10⁵"] ), 
-size =25)
-
-cb5 = Colorbar(ga[3,3], hdMG, ticks = (-1e8:1e8:1e8,  ["-1×10⁸", "0", "1×10⁸"] ),
- size =25,  flipaxis=false)
-cb6 = Colorbar(ga[3,3], hdMS, ticks = (-1e8:1e8:1e8,  ["-1×10⁸", "0", "1×10⁸"] ),
- size =25)
-
-colsize!(ga, 3, Relative(0.03))
-
-savename = "MbClasses_cut_" * @sprintf("n%d_", cut_ini_Nisos) * setname
-
-save(apath * savename * ".png", f, px_per_unit = 2)
+dMdb_SlopeGauss_plot(b_timeseries.times./pm.Tσ, isosdb_cut, ∂M∂bG_cut, ∂_∂M∂b_∂tG_cut, Δ∂M∂bG, ∂M∂bS_cut, ∂_∂M∂b_∂tS_cut, Δ∂M∂bS_cut,
+    ∂M∂bG_cutbounds, ∂_∂M∂b_∂tG_cutbounds, Δ∂M∂bG_cutbounds, ∂M∂bS_cutbounds, ∂_∂M∂b_∂tS_cutbounds, Δ∂M∂bS_cutbounds,
+    ∂M∂bG_cutticks, ∂_∂M∂b_∂tG_cutticks, Δ∂M∂bG_cutticks, ∂M∂bS_cutticks, ∂_∂M∂b_∂tS_cutticks, Δ∂M∂bS_cutticks,
+    "MbClasses_cut_" * @sprintf("n%d_", cut_ini_Nisos) * setname, apath)
 
 #########################
 #                   JUST SLOPE BOUYANCY dM/dB PLOT
@@ -768,193 +851,6 @@ savename = "MbSlopeClasses_" * @sprintf("n%d_", ini_Nisos) * setname
 save(apath * savename * ".png", f)
 
 #########################
-#                   FULL BOUYANCY dM/dB PLOT
-#########################
-# dMdb is in decsending order by class number but backwards buoynacy order
-
-f = Figure(resolution = (1000, 1100), fontsize=26)
-ga = f[1, 1] = GridLayout() 
-
-# change in volume
-axMdbpG = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axMdbpS = Axis(ga[1, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpS = Axis(ga[2, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpG = Axis(ga[3, 1], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpS = Axis(ga[3, 2], ylabel = "Buoyancy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-
-Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :bottom,
-font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
-
-Label(ga[2, 1:2, Top()],"Diapycnal Transport ∂(∂M/∂b)/∂t", valign = :bottom,
-    font = :bold, fontsize = 25,
-    padding = (0, 0, 5, 0))
-
-Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :bottom,
-font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
-axdMpG.xticks =  2:2:10
-axdMpS.xticks =  2:2:10
-
-axMdbpG.yticks =  -6*1e-3:2e-3:0
-axdtMpG.yticks =  -6*1e-3:2e-3:0
-axdMpG.yticks =  -6*1e-3:2e-3:0
-
-limits!(axMdbpG, 1, 10, -5e-3, -1e-3)
-limits!(axMdbpS, 1, 10, -5e-3, -1e-3)
-limits!(axdtMpG, 1, 10, -5e-3, -1e-3)
-limits!(axdtMpS, 1, 10, -5e-3, -1e-3)
-limits!(axdMpG, 1, 10, -5e-3, -1e-3)
-limits!(axdMpS, 1, 10, -5e-3, -1e-3)
-
-hidexdecorations!(axMdbpG)
-hidexdecorations!(axdtMpG)
-hidedecorations!(axMdbpS)
-hidedecorations!(axdtMpS)
-hideydecorations!(axdMpS)
-
-hMG = heatmap!(axMdbpG, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bG', colormap = :tempo, colorrange = (0, 1.5e8))
-hMS = heatmap!(axMdbpS, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bS', colormap = :tempo, colorrange = (0, 1e9))
-hdtMG = heatmap!(axdtMpG , b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tG', colormap = :balance, colorrange = (-7e4, 7e4))
-hdtMS = heatmap!(axdtMpS, b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tS', colormap = :balance, colorrange = (-5e5, 5e5))
-hdMG = heatmap!(axdMpG, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bG', colormap = :balance, colorrange = (-2e8, 2e8))
-hdMS = heatmap!(axdMpS, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bS', colormap = :balance, colorrange = (-4e8, 4e8))
-
-
-# create colorbars the size of the whole data set
-cb1 = Colorbar(ga[1,3], hMG, ticks = (0:5e7:1e8, ["0", "5×10⁷","1×10⁸"] ),
-size =25, flipaxis=false, label = "Gauss")
-cb2 = Colorbar(ga[1,3], hMS, ticks = (0:5e8:1e9, ["0", "5×10⁸","1×10⁹"] ),
-size =25, label = "Tanh")
-
-cb3 = Colorbar(ga[2,3], hdtMG, ticks = (-3e4:3e4:3e4, ["-3×10⁴", "0", "3×10⁴"] ), 
-size =25, label = "Gauss", flipaxis=false)
-cb4 = Colorbar(ga[2,3], hdtMS, ticks = (-3e5:3e5:3e5,  ["-3×10⁵", "0", "3×10⁵"] ), 
-size =25, label = "Tanh")
-
-cb5 = Colorbar(ga[3,3], hdMG, ticks = (-1e8:1e8:1e8,  ["-10⁸", "0", "10⁸"] ),
- size =25, label = "Gauss", flipaxis=false)
-cb6 = Colorbar(ga[3,3], hdMS, ticks = (-2e8:2e8:2e8,  ["-2×10⁸", "0", "2×10⁸"] ),
- size =25, label = "Tanh")
-
-colsize!(ga, 3, Relative(0.05))
-
-bigtitle = @sprintf("Tracers in Buoyancy Space, U₀=%0.2f, N=%0.2f ×10⁻³, δ=%0.1f", pm.U₀, pm.Ñ*1e3, pm.U₀/pm.Ñ)
-
-Label(f[1, 1, Top()],bigtitle, valign = :bottom,
-    font = :bold, fontsize = 30,
-    padding = (0, 0, 50, 0))
-
-savename = "MbClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname
-
-save(apath * savename * ".png", f)
-
-#########################
-#                   GAUSSIAN AND RAISED BOUYANCY dM/dB PLOT
-#########################
-
-f = Figure(resolution = (1000, 1100), fontsize=26)
-ga = f[1, 1] = GridLayout() 
-
-# change in volume
-axMdbpG = Axis(ga[1, 1], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axMdbpS = Axis(ga[1, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpG = Axis(ga[2, 1], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpS = Axis(ga[2, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpG = Axis(ga[3, 1], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpS = Axis(ga[3, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-
-Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :top,
-font = :bold, fontsize = 25,
-padding = (0, 0, 15, 0))
-
-Label(ga[2, 1:2, Top()],"Diapycnal Transport ∂(∂M/∂b)/∂t", valign = :top,
-    font = :bold, fontsize = 25,
-    padding = (0, 0, 5, 0))
-
-Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :top,
-font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
-
-#Label(ga[1, 1, Top()],"Gaussian", valign = :bottom,
-#font = :bold, fontsize = 25,
-#padding = (0, 0, 5, 0))
-
-#Label(ga[1, 2, Top()],"Raised Gaussian", valign = :bottom,
-#font = :bold, fontsize = 25,
-#padding = (0, 0, 0, 0))
-
-axdMpG.xticks =  2:2:10
-axdMpS.xticks =  2:2:10
-
-axMdbpG.yticks =  -6*1e-3:2e-3:0
-axdtMpG.yticks =  -6*1e-3:2e-3:0
-axdMpG.yticks =  -6*1e-3:2e-3:0
-
-limits!(axMdbpG, 1, 10, -5e-3, -1e-3)
-limits!(axMdbpS, 1, 10, -5e-3, -1e-3)
-limits!(axdtMpG, 1, 10, -5e-3, -1e-3)
-limits!(axdtMpS, 1, 10, -5e-3, -1e-3)
-limits!(axdMpG, 1, 10, -5e-3, -1e-3)
-limits!(axdMpS, 1, 10, -5e-3, -1e-3)
-
-hidexdecorations!(axMdbpG)
-hidexdecorations!(axdtMpG)
-hidedecorations!(axMdbpS)
-hidedecorations!(axdtMpS)
-hideydecorations!(axdMpS)
-
-hMG = heatmap!(axMdbpG, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bG', colormap = :tempo, colorrange = (0, 1.5e8))
-text!(axMdbpG, Point.(6, -0.0045), text = "(-250 m, 703 m)", align = (:left, :center), 
-        color = :black, fontsize = 20)
-
-hMS = heatmap!(axMdbpS, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bGr', colormap = :tempo, colorrange = (0, 1.5e8))
-text!(axMdbpS, Point.(6, -0.0045), text = "(-136 m , 743 m)", align = (:left, :center), 
-        color = :black, fontsize = 20)
-
-hdtMG = heatmap!(axdtMpG , b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tG', colormap = :balance, colorrange = (-7e4, 7e4))
-hdtMS = heatmap!(axdtMpS, b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tGr', colormap = :balance, colorrange = (-7e4, 7e4))
-hdMG = heatmap!(axdMpG, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bG', colormap = :balance, colorrange = (-2e8, 2e8))
-hdMS = heatmap!(axdMpS, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bGr', colormap = :balance, colorrange = (-2e8, 2e8))
-
-# create colorbars the size of the whole data set
-cb2 = Colorbar(ga[1,3], hMS, ticks = (0:5e7:1e8, ["0", "5×10⁷","1×10⁸"] ),
-size =25)
-cb4 = Colorbar(ga[2,3], hdtMS, ticks = (-3e4:3e4:3e4, ["-3×10⁴", "0", "3×10⁴"] ), 
-size =25)
-cb6 = Colorbar(ga[3,3], hdMS, ticks = (-1e8:1e8:1e8,  ["-10⁸", "0", "10⁸"] ),
- size =25)
-
-colsize!(ga, 3, Relative(0.05))
-
-dye_centy = dye_centz/-pm.Tanα
-dye_centz_raised = dye_centz + 120*cos(al)
-dye_centy_raised = dye_centy + 120*sin(al)
-
-bigtitle = @sprintf("Tracers in Buoyancy Space, U₀=%0.2f, N=%0.2f ×10⁻³, δ=%0.1f", pm.U₀, pm.Ñ*1e3, pm.U₀/pm.Ñ)
-
-Label(f[1, 1, Top()],bigtitle, valign = :bottom,
-    font = :bold, fontsize = 30,
-    padding = (0, 0, 50, 0))
-
-savename = "MbGaussClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname
-
-save(apath * savename * ".png", f)
-
-#########################
 #                   TRACER WEIGHTING Calculation
 #########################
 
@@ -977,99 +873,89 @@ end
 
 (b̄_Cg) = calculate_tracer_weight(CGi, Bi)
 (b̄_Cgr) = calculate_tracer_weight(CGri, Bi)
+(b̄_Cgl) = calculate_tracer_weight(CGli, Bi)
 
 #########################
-#                   BOUYANCY dM/dB PLOT w/ TRCAER WTD
+#                   GAUSSIAN, RAISED, and LATE RELEASE BOUYANCY dM/dB PLOT With TRACER WTD
 #########################
 
-f = Figure(resolution = (1000, 1100), fontsize=26)
+braised₀ = b̄_Cg[1]
+bonslope₀ = b̄_Cgr[1]
+blate₀ = b̄_Cgl[1]
+
+pre_∂M∂bGl = zeros(ini_Nisos, tlength - spinlength)
+full_∂M∂bGl = hcat(pre_∂M∂bGl, ∂M∂bGl)
+pre_Δ∂M∂bGl = zeros(ini_Nisos, tlength - spinlength)
+full_Δ∂M∂bGl = hcat(pre_Δ∂M∂bGl, Δ∂M∂bGl)
+
+f = Figure(resolution = (1000, 1600), fontsize=26)
 ga = f[1, 1] = GridLayout() 
 
 # change in volume
-axMdbpG = Axis(ga[1, 1], ylabel = "Buoynacy [ms⁻²]", 
+axMdbpG = Axis(ga[1, 1], ylabel = "Buoyancy [ms⁻²]")
+axMdbpGl = Axis(ga[1, 2])
+axMdbpGr = Axis(ga[1, 3])
+axdMpG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]", 
             xlabel = "Wave Periods [Tσ]",)
-axMdbpS = Axis(ga[1, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpG = Axis(ga[2, 1], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdtMpS = Axis(ga[2, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpG = Axis(ga[3, 1], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
-axdMpS = Axis(ga[3, 2], ylabel = "Buoynacy [ms⁻²]", 
-            xlabel = "Wave Periods [Tσ]",)
+axdMpGl = Axis(ga[2, 2], xlabel = "Wave Periods [Tσ]",)
+axdMpGr = Axis(ga[2, 3], xlabel = "Wave Periods [Tσ]",)
 
 Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :top,
 font = :bold, fontsize = 25,
 padding = (0, 0, 15, 0))
-
-Label(ga[2, 1:2, Top()],"Diapycnal Transport ∂(∂M/∂b)/∂t", valign = :top,
-    font = :bold, fontsize = 25,
-    padding = (0, 0, 5, 0))
 
 Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :top,
 font = :bold, fontsize = 25,
 padding = (0, 0, 5, 0))
 
 axdMpG.xticks =  2:2:10
-axdMpS.xticks =  2:2:10
+axdMpGr.xticks =  2:2:10
+axdMpGl.xticks =  2:2:10
 
 axMdbpG.yticks =  (bonslope₀ - 5e-4:5e-4:bonslope₀ + 5e-4, ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
-axdtMpG.yticks =  (bonslope₀- 5e-4:5e-4:bonslope₀ + 5e-4, ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
 axdMpG.yticks =  (bonslope₀ - 5e-4:5e-4:bonslope₀ + 5e-4, ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
 
 limits!(axMdbpG, 1, 10,bonslope₀ - 7e-4,bonslope₀ + 7e-4)
-limits!(axMdbpS, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
-limits!(axdtMpG, 1, 10, bonslope₀ -7e-4, bonslope₀ + 7e-4)
-limits!(axdtMpS, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
+limits!(axMdbpGr, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
+limits!(axMdbpGl, 1, 10, blate₀ - 7e-4 , blate₀ + 7e-4)
 limits!(axdMpG, 1, 10, bonslope₀ - 7e-4, bonslope₀ + 7e-4)
-limits!(axdMpS, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
+limits!(axdMpGr, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
+limits!(axdMpGl, 1, 10, blate₀ - 7e-4 , blate₀ + 7e-4)
 
 hidexdecorations!(axMdbpG)
-hidexdecorations!(axdtMpG)
-hidedecorations!(axMdbpS)
-hidedecorations!(axdtMpS)
-hideydecorations!(axdMpS)
+hidedecorations!(axMdbpGr)
+hidedecorations!(axMdbpGl)
+hideydecorations!(axdMpGr)
+hideydecorations!(axdMpGl)
 
-hMG = heatmap!(axMdbpG, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bG', colormap = :tempo, colorrange = (0, 8e7))
-text!(axMdbpG, Point.(3, bonslope₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703 m)", align = (:left, :center), 
+hMG = heatmap!(axMdbpG, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bG', colormap = :tempo, colorrange = (0, 2e8))
+text!(axMdbpG, Point.(2, bonslope₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703 m)", align = (:left, :center), 
         color = :black, fontsize = 20, font = :bold)
 lines!(axMdbpG, b_timeseries.times./pm.Tσ, b̄_Cg, color = :dodgerblue2, linewidth = 5)
 
-hMS = heatmap!(axMdbpS, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bGr', colormap = :tempo, colorrange = (0, 2.2e8))
-text!(axMdbpS, Point.(3, braised₀ - 0.6*1e-3), text = "Up 100m: (-136 m , 743 m)", align = (:left, :center), 
+hMGl = heatmap!(axMdbpGl, b_timeseries.times./pm.Tσ, isosdb, full_∂M∂bGl', colormap = :tempo, colorrange = (0, 2e8))
+text!(axMdbpS, Point.(2, blate₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703 m)", align = (:left, :center), 
         color = :black, fontsize = 20, font = :bold)
-lines!(axMdbpS, b_timeseries.times./pm.Tσ, b̄_Cgr, color = :dodgerblue2, linewidth = 5)
+lines!(axMdbpGl, b_timeseries.times./pm.Tσ, b̄_Cgl, color = :dodgerblue2, linewidth = 5)
 
-hdtMG = heatmap!(axdtMpG , b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tG', colormap = :balance, colorrange = (-7e4, 7e4))
-hdtMS = heatmap!(axdtMpS, b_timeseries.times./pm.Tσ, isosdb, ∂_∂M∂b_∂tGr', colormap = :balance, colorrange = (-7e4, 7e4))
+hMGr = heatmap!(axMdbpGr, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bGr', colormap = :tempo, colorrange = (0, 2e8))
+text!(axMdbpGr, Point.(2, braised₀ - 0.6*1e-3), text = "Up 100m: (-136 m , 743 m)", align = (:left, :center), 
+        color = :black, fontsize = 20, font = :bold)
+lines!(axMdbpGr, b_timeseries.times./pm.Tσ, b̄_Cgr, color = :dodgerblue2, linewidth = 5)
+
 hdMG = heatmap!(axdMpG, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bG', colormap = :balance, colorrange = (-2e8, 2e8))
-hdMS = heatmap!(axdMpS, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bGr', colormap = :balance, colorrange = (-2e8, 2e8))
+hdMGl = heatmap!(axdMpGl, b_timeseries.times./pm.Tσ, isosdb, full_Δ∂M∂bGl', colormap = :balance, colorrange = (-2e8, 2e8))
+hdMGr = heatmap!(axdMpGr, b_timeseries.times./pm.Tσ, isosdb, Δ∂M∂bGr', colormap = :balance, colorrange = (-2e8, 2e8))
 
 # create colorbars the size of the whole data set
-cb2 = Colorbar(ga[1,3], hMG, ticks = (0:5e7:1e8, ["0", "5×10⁷","1×10⁸"] ),
-size =25, flipaxis = false)
-cb2 = Colorbar(ga[1,3], hMS, ticks = (0:1e8:2e8, ["0", "1×10⁸", "2×10⁸"] ),
+
+cb1 = Colorbar(ga[1,4], hMG, ticks = (0:1e8:2e8, ["0", "1×10⁸", "2×10⁸"] ),
 size =25)
-cb4 = Colorbar(ga[2,3], hdtMS, ticks = (-3e4:3e4:3e4, ["-3×10⁴", "0", "3×10⁴"] ), 
-size =25)
-cb6 = Colorbar(ga[3,3], hdMS, ticks = (-1e8:1e8:1e8,  ["-10⁸", "0", "10⁸"] ),
+cb2 = Colorbar(ga[2,4], hdMG, ticks = (-1e8:1e8:1e8,  ["-1×10⁸", "0", "1×10⁸"] ),
  size =25)
 
-colsize!(ga, 3, Relative(0.05))
+colsize!(ga, 4, Relative(0.05))
 
-bigtitle = @sprintf("Tracers in Buoyancy Space, U₀=%0.2f, N=%0.2f ×10⁻³, δ=%0.1f", pm.U₀, pm.Ñ*1e3, pm.U₀/pm.Ñ)
-
-Label(f[1, 1, Top()],bigtitle, valign = :bottom,
-    font = :bold, fontsize = 30,
-    padding = (0, 0, 50, 0))
-
-savename = "MbGaussClasses_wcwtdsc_" * @sprintf("n%d_", ini_Nisos) * setname
+savename = "MbGaussClasses_cwtd_" * @sprintf("n%d_", ini_Nisos) * setname
 
 save(apath * savename * ".png", f)
-
-dye_centy = dye_centz/-pm.Tanα
-dye_centz_raised = dye_centz + 120*cos(al)
-dye_centy_raised = dye_centy + 120*sin(al)
-braised₀ = dye_centz_raised.* pm.Ñ^2
-bonslope₀ = dye_centz.* pm.Ñ^2
