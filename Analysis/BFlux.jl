@@ -70,6 +70,7 @@ filepath = path_name * name_prefix * ".jld2"
 b_timeseries = FieldTimeSeries(filepath, "b");
 v_timeseries = FieldTimeSeries(filepath, "v");
 w_timeseries = FieldTimeSeries(filepath, "w");
+e_timeseries = FieldTimeSeries(filepath,"ϵ");
 
 xb, yb, zb = nodes(b_timeseries) #CCC
 xv, yv, zv = nodes(v_timeseries) #CFC
@@ -80,6 +81,7 @@ tlength = 161
 bi = interior(b_timeseries)[:,1:ylength,:,:];
 vi = interior(v_timeseries)[:,1:ylength+1,:,:];
 wi = interior(w_timeseries)[:,1:ylength,:,:];
+ei = interior(e_timeseries)[:,1:ylength,:,:];
 
 α = atan(pm.Tanα)
 
@@ -104,6 +106,8 @@ Wl = wave_info.Wl
 #    ...
 #__ + 15/15
 end5waves = wave_info.WavePeriods[:,7:end]
+beg4waves = wave_info.WavePeriods[:,1:4]
+beg4waves = wave_info.WavePeriods[:,1:3]
 
 # reorienting into phases
 # x y z Ph W
@@ -112,12 +116,29 @@ v_Ph = v_ccc[:,:,:,end5waves];
 w_Ph = w_ccc[:,:,:,end5waves];
 v̂_Ph = v̂[:,:,:,end5waves];
 ŵ_Ph = ŵ[:,:,:,end5waves];
+e_Ph = ei[:,:,:, end5waves];
+
+b_Ph_b = bi[:,:,:,beg4waves];
+v_Ph_b  = v_ccc[:,:,:,beg4waves];
+w_Ph_b  = w_ccc[:,:,:,beg4waves];
+v̂_Ph_b  = v̂[:,:,:,beg4waves];
+ŵ_Ph_b  = ŵ[:,:,:,beg4waves];
+e_Ph_b = ei[:,:,:,beg4waves];
 
 # x, y, z, Ph
 b_Phavg = mean(b_Ph, dims = 5)[:,:,:,:,1];
 v_Phavg = mean(v_Ph, dims = 5)[:,:,:,:,1];
 v̂_Phavg = mean(v̂_Ph, dims = 5)[:,:,:,:,1];
-w_Phavg = mean(ŵ_Ph, dims = 5)[:,:,:,:,1];
+ŵ_Phavg = mean(ŵ_Ph, dims = 5)[:,:,:,:,1];
+e_Phavg = mean(e_Ph, dims = 5)[:,:,:,:,1];
+
+# x, y, z, Ph
+b_Phavg_b = mean(b_Ph_b, dims = 5)[:,:,:,:,1];
+v_Phavg_b = mean(v_Ph_b, dims = 5)[:,:,:,:,1];
+v̂_Phavg_b = mean(v̂_Ph_b, dims = 5)[:,:,:,:,1];
+ŵ_Phavg_b = mean(ŵ_Ph_b, dims = 5)[:,:,:,:,1];
+e_Phavg_b = mean(e_Ph_b, dims = 5)[:,:,:,:,1];
+
 @info "Wave Averaging..."
 
 # x, y, z
@@ -127,12 +148,11 @@ w_Wavg = mean(w_Ph, dims = (4,5))[:,:,:,1,1];
 v̂_Wavg = mean(v̂_Ph, dims = (4,5))[:,:,:,1,1];
 ŵ_Wavg = mean(ŵ_Ph, dims = (4,5))[:,:,:,1,1];
 
-# (x, y,z,Ph,W) - (x,y,z)
-#b_Phpert = b_Ph .- b_Phavg;
-#v_Phpert = v_Ph .- v_Phavg;
-#w_Phpert = w_Ph .- w_Phavg;
-#v̂_Phpert = v̂_Ph .- v̂_Phavg;
-#ŵ_Phpert = ŵ_Ph .- ŵ_Phavg;
+b_Wavg_b = mean(b_Ph_b, dims = (4,5))[:,:,:,1,1];
+v_Wavg_b = mean(v_Ph_b, dims = (4,5))[:,:,:,1,1];
+w_Wavg_b = mean(w_Ph_b, dims = (4,5))[:,:,:,1,1];
+v̂_Wavg_b = mean(v̂_Ph_b, dims = (4,5))[:,:,:,1,1];
+ŵ_Wavg_b = mean(ŵ_Ph_b, dims = (4,5))[:,:,:,1,1];
 
 @info "Finding Perturbations..."
 
@@ -143,11 +163,11 @@ w_Wpert = w_Ph .- w_Wavg;
 v̂_Wpert = v̂_Ph .- v̂_Wavg;
 ŵ_Wpert = ŵ_Ph .- ŵ_Wavg;
 
-# (y,z,Ph,W) * (y,z,Ph,W)
-#vb_Phpert = b_Phpert .* v_Phpert;
-#wb_Phpert = b_Phpert .* w_Phpert;
-#v̂b_Phpert = b_Phpert .* v̂_Phpert;
-#ŵb_Phpert = b_Phpert .* ŵ_Phpert;
+b_Wpert_b = b_Ph_b .- b_Wavg_b;
+v_Wpert_b = v_Ph_b .- v_Wavg_b;
+w_Wpert_b = w_Ph_b .- w_Wavg_b;
+v̂_Wpert_b = v̂_Ph_b .- v̂_Wavg_b;
+ŵ_Wpert_b = ŵ_Ph_b .- ŵ_Wavg_b;
 
 # (x,y,z,Ph,W)
 vb_Wpert = b_Wpert .* v_Wpert;
@@ -155,11 +175,10 @@ wb_Wpert = b_Wpert .* w_Wpert;
 v̂b_Wpert = b_Wpert .* v̂_Wpert;
 ŵb_Wpert = b_Wpert .* ŵ_Wpert;
 
-# (x,y,z,Ph)
-#vb_PhpertPhavg = mean(vb_Phpert, dims = 4)[:,:,:,1];
-#wb_PhpertPhavg = mean(wb_Phpert, dims = 4)[:,:,:,1];
-#v̂b_PhpertPhavg = mean(v̂b_Phpert, dims = 4)[:,:,:,1];
-#ŵb_PhpertPhavg = mean(ŵb_Phpert, dims = 4)[:,:,:,1];
+vb_Wpert_b = b_Wpert_b .* v_Wpert_b;
+wb_Wpert_b = b_Wpert_b .* w_Wpert_b;
+v̂b_Wpert_b = b_Wpert_b .* v̂_Wpert_b;
+ŵb_Wpert_b = b_Wpert_b .* ŵ_Wpert_b;
 
 @info "Averaging fluxes..."
 
@@ -174,6 +193,17 @@ vb_WpertPhavg = mean(vb_Wpert, dims = 5)[:,:,:,:,1];
 wb_WpertPhavg = mean(wb_Wpert, dims = 5)[:,:,:,:,1];
 v̂b_WpertPhavg = mean(v̂b_Wpert, dims = 5)[:,:,:,:,1];
 ŵb_WpertPhavg = mean(ŵb_Wpert, dims = 5)[:,:,:,:,1];
+
+vb_WpertWavg_b = mean(vb_Wpert_b, dims = (4,5))[:,:,:,1,1];
+wb_WpertWavg_b = mean(wb_Wpert_b, dims = (4,5))[:,:,:,1,1];
+v̂b_WpertWavg_b = mean(v̂b_Wpert_b, dims = (4,5))[:,:,:,1,1];
+ŵb_WpertWavg_b = mean(ŵb_Wpert_b, dims = (4,5))[:,:,:,1,1];
+
+# (x,y,z, W)
+vb_WpertPhavg_b = mean(vb_Wpert_b, dims = 5)[:,:,:,:,1];
+wb_WpertPhavg_b = mean(wb_Wpert_b, dims = 5)[:,:,:,:,1];
+v̂b_WpertPhavg_b = mean(v̂b_Wpert_b, dims = 5)[:,:,:,:,1];
+ŵb_WpertPhavg_b = mean(ŵb_Wpert_b, dims = 5)[:,:,:,:,1];
 
 phase_times = b_timeseries.times[wave_info.WavePeriods[:,1]]/pm.Tσ
 
@@ -196,7 +226,24 @@ ŵb_WpertWavg,
 v_Phavg, 
 v_Wavg,
 v̂_Phavg,
+ŵ_Phavg,
 v̂_Wavg,
 b_Phavg,
+e_Phavg,
+vb_WpertPhavg_b, # perturbations via wave average, but still split in phases for <>
+wb_WpertPhavg_b,
+v̂b_WpertPhavg_b,
+ŵb_WpertPhavg_b,
+vb_WpertWavg_b, # perturbations via wave average and <> wave averaged
+wb_WpertWavg_b,
+v̂b_WpertWavg_b,
+ŵb_WpertWavg_b,
+v_Phavg_b, 
+v_Wavg_b,
+v̂_Phavg_b,
+ŵ_Phavg_b,
+v̂_Wavg_b,
+b_Phavg_b,
+e_Phavg_b,
 yb, zb, phase_times)
 
