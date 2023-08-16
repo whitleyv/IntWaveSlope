@@ -64,8 +64,8 @@ wavsa = interest_idx1 .* (600/pm.Tσ)
 
 f1 = Figure(resolution = (1800, 400), fontsize=26)
 ga = f1[1:2, 1] = GridLayout()
-gab1 = f1[1, 2] = GridLayout()
-gab2 = f1[2, 2] = GridLayout()        
+gab1 = f1[1:2, 2] = GridLayout()
+gab2 = f1[1:2, 3] = GridLayout()        
 
 axv1 = Axis(ga[1, 1])
 axv2 = Axis(ga[1, 2])
@@ -135,7 +135,7 @@ cb2 = Colorbar(gab2[1,1], hmc, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻�
 
 # making colorbars take up less space
 colsize!(f1.layout, 2, Relative(0.05))
-#colsize!(f1.layout, 3, Relative(0.05))    
+colsize!(f1.layout, 3, Relative(0.05))    
 
 savename = "waveseries_split1_" * setname
 apath  = path_name * "Analysis/"
