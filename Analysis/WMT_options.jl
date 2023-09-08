@@ -51,7 +51,11 @@ name3_prefix = "IntWave_postspin_" * setname
 
 filepath1 = path_name * name1_prefix * ".jld2"
 filepath2 = path_name * name2_prefix * ".jld2"
-filepath3 = path_name * name3_prefix * ".jld2"
+#filepath3 = path_name * name3_prefix * ".jld2"
+filepath3 = path_name * "cgl_" * setname * ".jld2"
+
+f3 = jldopen(filepath3)
+CGli = f3["Cgli"];
 
 @info "getting data from: " * setname
 
@@ -70,15 +74,15 @@ e_timeseries = FieldTimeSeries(filepath1,"ϵ");
 Cg_timeseries = FieldTimeSeries(filepath2,"Cg");
 Cs_timeseries = FieldTimeSeries(filepath2,"Cs");
 Cgr_timeseries = FieldTimeSeries(filepath1,"Cgr");
-Cgl_timeseries = FieldTimeSeries(filepath3, "Cg");
+#Cgl_timeseries = FieldTimeSeries(filepath3, "Cg");
 
 CSi = interior(Cs_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
 CGi = interior(Cg_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
 CGri = interior(Cgr_timeseries)[:, 1:ylength, 1:zlength,:];
-Cgli = interior(Cgl_timeseries)[:, 1:ylength, 1:xzlength,:];
+#Cgli = interior(Cgl_timeseries)[:, 1:ylength, 1:zlength,:];
 ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
 Bi = interior(b_timeseries)[:, 1:ylength, 1:zlength,:];
-
+# Cgl2i = interior(Cg_timeseries[:, 1:1000, :,:];
 @info "Computing Volumes..."
 ini_Nisos = 40 # number of bins
 Δb = -1.47*1e-4 #-500*pm.Ñ^2/ini_Nisos # "width" of bins
@@ -521,7 +525,7 @@ waveavg_volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_rWavg_025d, ΔConG_r
 ini_Nisos = 250
 Δb = -500*pm.Ñ^2/ini_Nisos
 
-spinlength = length(Cgl_timeseries.times)
+spinlength = size(CGli)[4]
 
 function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGli, CSi)
    
@@ -563,7 +567,7 @@ function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGl
         bi = Bi[:,:, :, i];
         Cgi = CGi[:,:,:, i];
         Cgri = CGri[:,:,:, i];
-        Csi = CSi[:,:,:, i];
+        #Csi = CSi[:,:,:, i];
         Cgli = CGli[:,:,:, i - prelength];
 
         # for each buoyancy class:
@@ -574,20 +578,77 @@ function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGl
             # dye within the isopycnal layer
             cG_inb = Cgi[boolB]
             cGr_inb = Cgri[boolB]
-            cGl_inb = Clri[boolB]
-            cS_inb = Csi[boolB]
+            cGl_inb = Cgli[boolB]
+            #cS_inb = Csi[boolB]
             # volume integrated dye concentration:
             M_btG[n,i] = sum(cG_inb)*16
             M_btGr[n,i] = sum(cGr_inb)*16
             M_btGl[n,i - prelength] = sum(cGl_inb)*16
-            M_btS[n,i] = sum(cS_inb)*16
+            #M_btS[n,i] = sum(cS_inb)*16
         end
     end
 
     return M_btG, M_btGr, M_btGl, M_btS
 end
 
-(M_btG, M_btGr, M_btGl, M_btS) = dMdb_Concetration_Calc(ini_Nisos, 1:ini_Nisos, tlength, spinlength, Bi, CGi, CGri, CGli, CSi)
+function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGli)
+   
+    @info "Calculating isopycnal volume..."
+    M_btG = zeros(ini_Nisos, tlength)
+    M_btGr = zeros(ini_Nisos, tlength)
+    M_btGl = zeros(ini_Nisos, spinlength)
+
+    prelength = tlength - spinlength
+
+    for i = 1:prelength
+        @info "Time $i of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bi = Bi[:,:, :, i];
+        Cgi = CGi[:,:,:, i];
+        Cgri = CGri[:,:,:, i];
+
+        # for each buoyancy class:
+        for n = nrange
+            # (1) CCC locations in the density class
+            # starting with b < 0 should be almost the whole domain
+            boolB = (bi.< Δb*(n-1))
+            # dye within the isopycnal layer
+            cG_inb = Cgi[boolB]
+            cGr_inb = Cgri[boolB]
+            # volume integrated dye concentration:
+            M_btG[n,i] = sum(cG_inb)*16
+            M_btGr[n,i] = sum(cGr_inb)*16
+        end
+    end
+
+    for i = prelength+1:tlength
+        @info "Time $i of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bi = Bi[:,:, :, i];
+        Cgi = CGi[:,:,:, i];
+        Cgri = CGri[:,:,:, i];
+        Cgli = CGli[:,:,:, i - prelength];
+
+        # for each buoyancy class:
+        for n = nrange
+            # (1) CCC locations in the density class
+            # starting with b < 0 should be almost the whole domain
+            boolB = (bi.< Δb*(n-1))
+            # dye within the isopycnal layer
+            cG_inb = Cgi[boolB]
+            cGr_inb = Cgri[boolB]
+            cGl_inb = Cgli[boolB]
+            # volume integrated dye concentration:
+            M_btG[n,i] = sum(cG_inb)*16
+            M_btGr[n,i] = sum(cGr_inb)*16
+            M_btGl[n,i - prelength] = sum(cGl_inb)*16
+        end
+    end
+
+    return M_btG, M_btGr, M_btGl
+end
+
+(M_btG, M_btGr, M_btGl) = dMdb_binning(ini_Nisos, 1:ini_Nisos, tlength, spinlength, Bi, CGi, CGri, CGli)
 
 Δt = b_timeseries.times[2] - b_timeseries.times[1]
 
@@ -868,27 +929,123 @@ function calculate_tracer_weight(CGi, Bi)
     # b̄ =  ∫ cb dV / ∫ c dV
     c_weighted_bavg = cbsum ./ csum;
 
-    return c_weighted_bavg
+    return c_weighted_bavg, csum
 end
 
-(b̄_Cg) = calculate_tracer_weight(CGi, Bi)
-(b̄_Cgr) = calculate_tracer_weight(CGri, Bi)
-(b̄_Cgl) = calculate_tracer_weight(CGli, Bi)
+function calculate_cb_velocities(CGi, CGli, CGri, Bi, Δt)
+    @info "Calculating Tracer Velocity..."
+    ∂Cg_∂t = (CGi[:,:,:,2:end] .- CGi[:,:,:,1:end-1])./ Δt
+    ∂Cgl_∂t = (CGli[:,:,:,2:end] .- CGli[:,:,:,1:end-1])./ Δt
+    ∂Cgr_∂t = (CGri[:,:,:,2:end] .- CGri[:,:,:,1:end-1])./ Δt
+    @info "Calculating Buoynacy Velocity..."
+    ∂b_∂t = (Bi[:,:,:,2:end] .- Bi[:,:,:,1:end-1])./ Δt
+
+    return ∂Cg_∂t, ∂Cgl_∂t, ∂Cgr_∂t, ∂b_∂t
+end
+
+function calculate_tracer_weight_velocity_terms(b̄_Cg, csum, ∂b_∂t, ∂C_∂t, CGi, Bi, Δt)
+    
+    @info "Calculating Tracer Wtd Velocity"
+    ∂b̄_∂t =  (b̄_Cg[2:end] .- b̄_Cg[1:end-1])./ Δt
+
+    @info "Calculating total two terms..."
+    b∂C_∂t = ∂C_∂t .*Bi[:,:,:,2:end]
+    C∂b_∂t = ∂b_∂t .*CGi[:,:,:,2:end]
+
+    @info "Integrating..."
+    ∫b∂C_∂t = sum(b∂C_∂t, dims = (1,2,3))[1,1,1,:]
+    ∫C∂b_∂t = sum(C∂b_∂t, dims = (1,2,3))[1,1,1,:]
+
+    ∫b∂C_∂t_csum = ∫b∂C_∂t ./ csum[2:end]
+    ∫C∂b_∂t_csum = ∫C∂b_∂t ./ csum[2:end]
+
+    return ∫b∂C_∂t_csum, ∫C∂b_∂t_csum, ∂b̄_∂t
+end
+
+(b̄_Cg, Cg_sum) = calculate_tracer_weight(CGi, Bi)
+(b̄_Cgr, Cgr_sum) = calculate_tracer_weight(CGri, Bi)
+(b̄_Cgl, Cgl_sum) = calculate_tracer_weight(CGli, Bi[:,:,:,(tlength-spinlength+1):end])
+
+(∂Cg_∂t, ∂Cgl_∂t, ∂Cgr_∂t, ∂b_∂t) = calculate_cb_velocities(CGi, CGli, CGri, Bi, Δt)
+
+(∫b∂Cg_∂t_Cg_sum, ∫Cg∂b_∂t_Cgsum, ∂b̄_∂t_Cg) = calculate_tracer_weight_velocity_terms(b̄_Cg, Cg_sum, ∂b_∂t, ∂Cg_∂t, CGi, Bi, 600.0)
+(∫b∂Cgr_∂t_Cgr_sum, ∫Cgr∂b_∂t_Cgrsum, ∂b̄_∂t_Cgr) = calculate_tracer_weight_velocity_terms(b̄_Cgr, Cgr_sum, ∂b_∂t, ∂Cgr_∂t, CGri, Bi, 600.0)
+(∫b∂Cgl_∂t_Cgl_sum, ∫Cgl∂b_∂t_Cglsum, ∂b̄_∂t_Cgl) = calculate_tracer_weight_velocity_terms(b̄_Cgl, Cgl_sum, ∂b_∂t[:,:,:,(tlength-spinlength+1):end], ∂Cgl_∂t, CGli, Bi[:,:,:,(tlength-spinlength+1):end], 600.0)
+
+######################
+#                  GAUSSIAN, RAISED, and LATE RELEASE WTD VELOCITY TERMS PLOT
+#######################
+
+f = Figure(resolution = (1200, 1000), fontsize=26)
+ga = f[1, 1] = GridLayout() 
+
+ax1 = Axis(ga[1, 1], ylabel = "∂b̄/∂t [ms⁻³]")
+ax2 = Axis(ga[2, 1], ylabel = "∂b̄/∂t [ms⁻³]")
+ax3 = Axis(ga[3, 1], ylabel = "∂b̄/∂t [ms⁻³]", xlabel = "Wave Periods [Tσ]")
+ax3.xticks =  2:2:10
+
+ax1.yticks =  (-5e-7:5e-7:5e-7, ["-5×10⁻⁷", "0", "5×10⁻⁷"])
+ax2.yticks =   (-5e-7:5e-7:5e-7, ["-5×10⁻⁷", "0", "5×10⁻⁷"])
+ax3.yticks =  (-5e-7:5e-7:5e-7, ["-5×10⁻⁷", "0", "5×10⁻⁷"])
+
+limits!(ax1, 1, 10, -1e-6,   1e-6)
+limits!(ax2, 1, 10, -1e-6,   1e-6)
+limits!(ax3, 1, 10, -1e-6,   1e-6)
+
+hidexdecorations!(ax1)
+hidexdecorations!(ax2)
+
+dt_times = b_timeseries.times[2:end]./pm.Tσ
+dt_times_spin = b_timeseries.times[tlength-spinlength+2:end]./pm.Tσ
+
+dbb = lines!(ax1, dt_times, ∂b̄_∂t_Cg, color = :gray32, linewidth = 5)
+cdb = lines!(ax1, dt_times, ∫Cg∂b_∂t_Cgsum, color = :firebrick2, linewidth = 5)
+bdc = lines!(ax1, dt_times, ∫b∂Cg_∂t_Cg_sum, color = :dodgerblue2, linewidth = 5)
+
+lines!(ax2, dt_times_spin, ∂b̄_∂t_Cgl, color = :gray32, linewidth = 5)
+lines!(ax2, dt_times_spin, ∫Cgl∂b_∂t_Cglsum, color = :firebrick2, linewidth = 5)
+lines!(ax2, dt_times_spin, ∫b∂Cgl_∂t_Cgl_sum, color = :dodgerblue2, linewidth = 5)
+
+lines!(ax3, dt_times, ∂b̄_∂t_Cgr, color = :gray32, linewidth = 5)
+lines!(ax3, dt_times, ∫Cgr∂b_∂t_Cgrsum, color = :firebrick2, linewidth = 5)
+lines!(ax3, dt_times, ∫b∂Cgr_∂t_Cgr_sum, color = :dodgerblue2, linewidth = 5)
+
+Legend(ga[1, 1, Top()], [dbb, cdb, bdc], ["∂b̄/∂t", "∫c ∂b/∂t dV", "∫b ∂c/∂t dV"],
+                tellheight = false, tellwidth = false,
+                margin = (10, 10, 10, 30), framevisible = false, patchlabelgap = 7,
+                halign = :center, valign = :bottom, orientation = :horizontal)
+
+Label(ga[1, 1, Top()],"On Slope, Release t = 0 Tσ", valign = :top,
+                font = :bold, fontsize = 25,
+                padding = (0, 0, 10, 0))
+                
+Label(ga[2, 1, Top()],"On Slope, Release t = 4 Tσ", valign = :top,
+                font = :bold, fontsize = 25,
+                padding = (0, 0, 10, 0))
+    
+Label(ga[3, 1, Top()], "Off Slope, Release t = 0 Tσ", valign = :top,
+                font = :bold, fontsize = 25,
+                padding = (0, 0, 10, 0))
+
+savename = "Gauss_cwtd_dbdt_" * setname
+
+save(apath * savename * ".png", f)
 
 #########################
 #                   GAUSSIAN, RAISED, and LATE RELEASE BOUYANCY dM/dB PLOT With TRACER WTD
 #########################
+isosdb = Δb.*((ini_Nisos - 1.5):-1:0.5)
 
-braised₀ = b̄_Cg[1]
-bonslope₀ = b̄_Cgr[1]
+braised₀ = b̄_Cgr[1]
+bonslope₀ = b̄_Cg[1]
 blate₀ = b̄_Cgl[1]
 
-pre_∂M∂bGl = zeros(ini_Nisos, tlength - spinlength)
+pre_∂M∂bGl = zeros(ini_Nisos-1, tlength - spinlength)
 full_∂M∂bGl = hcat(pre_∂M∂bGl, ∂M∂bGl)
-pre_Δ∂M∂bGl = zeros(ini_Nisos, tlength - spinlength)
+pre_Δ∂M∂bGl = zeros(ini_Nisos-1, tlength - spinlength)
 full_Δ∂M∂bGl = hcat(pre_Δ∂M∂bGl, Δ∂M∂bGl)
 
-f = Figure(resolution = (1000, 1600), fontsize=26)
+f = Figure(resolution = (2000, 1400), fontsize=26)
 ga = f[1, 1] = GridLayout() 
 
 # change in volume
@@ -900,20 +1057,20 @@ axdMpG = Axis(ga[2, 1], ylabel = "Buoyancy [ms⁻²]",
 axdMpGl = Axis(ga[2, 2], xlabel = "Wave Periods [Tσ]",)
 axdMpGr = Axis(ga[2, 3], xlabel = "Wave Periods [Tσ]",)
 
-Label(ga[1, 1:2, Top()],"Tracer Distribution ∂M/∂b", valign = :top,
+Label(ga[1, 1:3, Top()],"Tracer Distribution ∂M/∂b", valign = :top,
 font = :bold, fontsize = 25,
-padding = (0, 0, 15, 0))
+padding = (0, 0, 10, 0))
 
-Label(ga[3, 1:2, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :top,
+Label(ga[2, 1:3, Top()],"Distribution Changes ∂M/∂b - ∂M₀/∂b", valign = :top,
 font = :bold, fontsize = 25,
-padding = (0, 0, 5, 0))
+padding = (0, 0, 10, 0))
 
 axdMpG.xticks =  2:2:10
 axdMpGr.xticks =  2:2:10
 axdMpGl.xticks =  2:2:10
 
-axMdbpG.yticks =  (bonslope₀ - 5e-4:5e-4:bonslope₀ + 5e-4, ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
-axdMpG.yticks =  (bonslope₀ - 5e-4:5e-4:bonslope₀ + 5e-4, ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
+axMdbpG.yticks =  ((bonslope₀ - 5e-4):5e-4:(bonslope₀ + 6e-4), ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
+axdMpG.yticks =  ((bonslope₀ - 5e-4):5e-4:(bonslope₀ + 6e-4), ["b₀ - 5×10⁻⁴", "b₀", "b₀ + 5×10⁻⁴"])
 
 limits!(axMdbpG, 1, 10,bonslope₀ - 7e-4,bonslope₀ + 7e-4)
 limits!(axMdbpGr, 1, 10, braised₀ - 7e-4 , braised₀ + 7e-4)
@@ -934,9 +1091,9 @@ text!(axMdbpG, Point.(2, bonslope₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703
 lines!(axMdbpG, b_timeseries.times./pm.Tσ, b̄_Cg, color = :dodgerblue2, linewidth = 5)
 
 hMGl = heatmap!(axMdbpGl, b_timeseries.times./pm.Tσ, isosdb, full_∂M∂bGl', colormap = :tempo, colorrange = (0, 2e8))
-text!(axMdbpS, Point.(2, blate₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703 m)", align = (:left, :center), 
+text!(axMdbpGl, Point.(2, blate₀ - 0.6*1e-3), text = "On Slope: (-250 m, 703 m)", align = (:left, :center), 
         color = :black, fontsize = 20, font = :bold)
-lines!(axMdbpGl, b_timeseries.times./pm.Tσ, b̄_Cgl, color = :dodgerblue2, linewidth = 5)
+lines!(axMdbpGl, b_timeseries.times[tlength-spinlength+1:end]./pm.Tσ, b̄_Cgl, color = :dodgerblue2, linewidth = 5)
 
 hMGr = heatmap!(axMdbpGr, b_timeseries.times./pm.Tσ, isosdb, ∂M∂bGr', colormap = :tempo, colorrange = (0, 2e8))
 text!(axMdbpGr, Point.(2, braised₀ - 0.6*1e-3), text = "Up 100m: (-136 m , 743 m)", align = (:left, :center), 
