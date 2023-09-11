@@ -119,23 +119,24 @@ b_Ph_b, v_Ph_b, w_Ph_b, v̂_Ph_b, ŵ_Ph_b, e_Ph_b, c_Ph_b  = phase_orient(beg3w
 b_Ph_c, v_Ph_c, w_Ph_c, v̂_Ph_c, ŵ_Ph_c, e_Ph_c, c_Ph_c  = phase_orient(trans3waves, bi, v_ccc, w_ccc, v̂, ŵ, ei, ci)
 
 @info " X averaging...."
-function x_average(b_Ph, v_Ph, v̂_Ph, ŵ_Ph, e_Ph, c_Ph)
+function x_average(b_Ph, v_Ph, w_Ph, v̂_Ph, ŵ_Ph, e_Ph, c_Ph)
 
     # y, z, Ph, W
     b_xavg = mean(b_Ph, dims = 1);
     v_xavg = mean(v_Ph, dims = 1);
     v̂_xavg = mean(v̂_Ph, dims = 1);
+    w_xavg = mean(w_Ph, dims = 1);
     ŵ_xavg = mean(ŵ_Ph, dims = 1);
     e_xavg = mean(e_Ph, dims = 1);
     c_xavg = mean(c_Ph, dims = 1);
  
-    xavg_values = (; b_xavg, v_xavg, v̂_xavg, ŵ_xavg,e_xavg, c_xavg)
+    xavg_values = (; b_xavg, v_xavg, w_xavg, v̂_xavg, ŵ_xavg,e_xavg, c_xavg)
     return xavg_values
 end 
 
-xavg_values = x_average(b_Ph, v_Ph, v̂_Ph, ŵ_Ph, e_Ph, c_Ph)
-xavg_values_b = x_average(b_Ph_b, v_Ph_b, v̂_Ph_b, ŵ_Ph_b, e_Ph_b, c_Ph_b )
-xavg_values_c = x_average(b_Ph_c, v_Ph_c, v̂_Ph_c, ŵ_Ph_c, e_Ph_c, c_Ph_c)
+xavg_values = x_average(b_Ph, v_Ph, w_Ph, v̂_Ph, ŵ_Ph, e_Ph, c_Ph)
+xavg_values_b = x_average(b_Ph_b, v_Ph_b, w_Ph_b, v̂_Ph_b, ŵ_Ph_b, e_Ph_b, c_Ph_b )
+xavg_values_c = x_average(b_Ph_c, v_Ph_c, w_Ph_c, v̂_Ph_c, ŵ_Ph_c, e_Ph_c, c_Ph_c)
 
 function fluxes(b_Ph, v_Ph, w_Ph, v̂_Ph, ŵ_Ph, xavg_values)
     @info "Finding Perturbations..."
