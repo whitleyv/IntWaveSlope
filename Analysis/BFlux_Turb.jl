@@ -122,12 +122,12 @@ b_Ph_c, v_Ph_c, w_Ph_c, v̂_Ph_c, ŵ_Ph_c, e_Ph_c, c_Ph_c  = phase_orient(trans
 function x_average(b_Ph, v_Ph, v̂_Ph, ŵ_Ph, e_Ph, c_Ph)
 
     # y, z, Ph, W
-    b_xavg = mean(b_Ph, dims = 1)[1,:,:,:,:];
-    v_xavg = mean(v_Ph, dims = 1)[1,:,:,:,:];
-    v̂_xavg = mean(v̂_Ph, dims = 1)[1,:,:,:,:];
-    ŵ_xavg = mean(ŵ_Ph, dims = 1)[1,:,:,:,:];
-    e_xavg = mean(e_Ph, dims = 1)[1,:,:,:,:];
-    c_xavg = mean(c_Ph, dims = 1)[1,:,:,:,:];
+    b_xavg = mean(b_Ph, dims = 1);
+    v_xavg = mean(v_Ph, dims = 1);
+    v̂_xavg = mean(v̂_Ph, dims = 1);
+    ŵ_xavg = mean(ŵ_Ph, dims = 1);
+    e_xavg = mean(e_Ph, dims = 1);
+    c_xavg = mean(c_Ph, dims = 1);
  
     xavg_values = (; b_xavg, v_xavg, v̂_xavg, ŵ_xavg,e_xavg, c_xavg)
     return xavg_values
@@ -170,13 +170,13 @@ flux_values_c = fluxes(b_Ph_c, v_Ph_c, w_Ph_c, v̂_Ph_c, ŵ_Ph_c, xavg_values_c
 
 function phase_average(xavg_values, flux_values)
     # x, y, z, Ph
-    b_xavgPhavg = mean(xavg_values.b_xavg, dims = 4)[:,:,:,1];
-    v_xavgPhavg = mean(xavg_values.v_xavg, dims = 4)[:,:,:,1];
-    w_xavgPhavg = mean(xavg_values.w_xavg, dims = 4)[:,:,:,1];
-    v̂_xavgPhavg = mean(xavg_values.v̂_xavg, dims = 4)[:,:,:,1];
-    ŵ_xavgPhavg = mean(xavg_values.ŵ_xavg, dims = 4)[:,:,:,1];
-    e_xavgPhavg = mean(xavg_values.e_xavg, dims = 4)[:,:,:,1];
-    c_xavgPhavg = mean(xavg_values.c_xavg, dims = 4)[:,:,:,1];
+    b_xavgPhavg = mean(xavg_values.b_xavg, dims = 5)[1,:,:,:,1];
+    v_xavgPhavg = mean(xavg_values.v_xavg, dims = 5)[1,:,:,:,1];
+    w_xavgPhavg = mean(xavg_values.w_xavg, dims = 5)[1,:,:,:,1];
+    v̂_xavgPhavg = mean(xavg_values.v̂_xavg, dims = 5)[1,:,:,:,1];
+    ŵ_xavgPhavg = mean(xavg_values.ŵ_xavg, dims = 5)[1,:,:,:,1];
+    e_xavgPhavg = mean(xavg_values.e_xavg, dims = 5)[1,:,:,:,1];
+    c_xavgPhavg = mean(xavg_values.c_xavg, dims = 5)[1,:,:,:,1];
     vb_xpertxavgPhavg = mean(flux_values.vb_xpertxavg, dims = 4)[:,:,:,1];
     wb_xpertxavgPhavg = mean(flux_values.wb_xpertxavg, dims = 4)[:,:,:,1];
     v̂b_xpertxavgPhavg = mean(flux_values.v̂b_xpertxavg, dims = 4)[:,:,:,1];
@@ -192,16 +192,16 @@ end
 
 function wave_average(xavg_values, flux_values)
     # x, y, z
-    v_xavgWavg = mean(xavg_values.v_xavg, dims = (3,4))[:,:,1,1];
-    w_xavgWavg = mean(xavg_values.w_xavg, dims = (3,4))[:,:,1,1];
-    v̂_xavgWavg = mean(xavg_values.v̂_xavg, dims = (3,4))[:,:,1,1];
-    ŵ_xavgWavg = mean(xavg_values.ŵ_xavg, dims = (3,4))[:,:,1,1];
+    v_xavgWavg = mean(xavg_values.v_xavg, dims = (4,5))[1,:,:,1,1];
+    w_xavgWavg = mean(xavg_values.w_xavg, dims = (4,5))[1,:,:,1,1];
+    v̂_xavgWavg = mean(xavg_values.v̂_xavg, dims = (4,5))[1,:,:,1,1];
+    ŵ_xavgWavg = mean(xavg_values.ŵ_xavg, dims = (4,5))[1,:,:,1,1];
     vb_xpertxavgWavg = mean(flux_values.vb_xpertxavg, dims = (3,4))[:,:,1,1];
     wb_xpertxavgWavg = mean(flux_values.wb_xpertxavg, dims = (3,4))[:,:,1,1];
     v̂b_xpertxavgWavg = mean(flux_values.v̂b_xpertxavg, dims = (3,4))[:,:,1,1];
     ŵb_xpertxavgWavg = mean(flux_values.ŵb_xpertxavg, dims = (3,4))[:,:,1,1];
 
-    WaveAveragedVals = (; b_xavgWavg, v_xavgWavg, w_xavgWavg, 
+    WaveAveragedVals = (; v_xavgWavg, w_xavgWavg, 
     v̂_xavgWavg, ŵ_xavgWavg, vb_xpertxavgWavg, wb_xpertxavgWavg, v̂b_xpertxavgWavg,
     ŵb_xpertxavgWavg)
 
