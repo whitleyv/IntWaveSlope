@@ -1,9 +1,8 @@
-using Plots
 using Measures
 using Statistics
 using Printf
 using Oceananigans
-
+using JLD2
 using CairoMakie
 using ArgParse
 
@@ -15,7 +14,6 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
 const gausT_width = 180
 const ySlopeSameˢ = 1332.22                           # point where planar and curved corner math up the best
-
 
 function parse_commandline()
   s = ArgParseSettings()
@@ -87,133 +85,90 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 
 @info "Pulling Data..."
 path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
-name_prefix = "IntWave_mp_" * setname
-#name_prefix = "IntWave_" * setname * @sprintf("_R%0.0f", resS*100)
-filepath = path_name * name_prefix * ".jld2"
 
-v_timeseries = FieldTimeSeries(filepath,"v");
-cs_timeseries = FieldTimeSeries(filepath,"Cs");
-cg_timeseries = FieldTimeSeries(filepath,"Cg");
-b_timeseries = FieldTimeSeries(filepath,"b");
-ε_timeseries = FieldTimeSeries(filepath, "ϵ");
-N2_timeseries = FieldTimeSeries(filepath, "N2");
+name1_prefix = "IntWave_" * setname
+name2_prefix = "IntWave_smdt_" * setname
+
+filepath1 = path_name * name1_prefix * ".jld2"
+filepath2 = path_name * name2_prefix * ".jld2"
+
+# late releases of dye
+filepath3 = path_name * "cgl_" * setname * ".jld2"
+filepath4 = path_name * "cgl2_" * setname * ".jld2"
+
+f3 = jldopen(filepath3)
+CGli = f3["Cgli"];
+
+f4 = jldopen(filepath4)
+CGl2i = f4["CGl2i"];
+
+# gaussian at slope but with increased time resolution
+Cg_timeseries = FieldTimeSeries(filepath2,"Cg");
+Cs_timeseries = FieldTimeSeries(filepath2,"Cs");
+
+spinlength = size(CGli)[4]
+spinlength2 = size(CGl2i)[4]
+spinupL = 161 - spinlength
+spinupL2 = 161 - spinlength2
+
+v_timeseries = FieldTimeSeries(filepath2,"v");
+b_timeseries = FieldTimeSeries(filepath2,"b");
+ε_timeseries = FieldTimeSeries(filepath2, "ϵ");
+
+v_timeseries = FieldTimeSeries(filepath1,"v");
+b_timeseries = FieldTimeSeries(filepath1,"b");
+ε_timeseries = FieldTimeSeries(filepath1, "ϵ");
+Cgr_timeseries = FieldTimeSeries(filepath1,"Cgr");
 
 xc, yc, zc = nodes(b_timeseries) #CCC
 xv, yv, zv = nodes(v_timeseries) #CFC
-xn, yn, zn = nodes(N2_timeseries) #CFC
 
 land = curvedslope.(yc) 
 
-kwargs = Dict(:linewidth => 0,
-:colorbar => :true,
-:xlims => (0, 4000),
-:ylims => (-500, 0),
-:size => (1150, 1200))
-
 delta = pm.U₀/pm.Ñ
-
-big_title = @sprintf("Internal Wave Breaking, U₀=%0.3f, N=%0.2f×10⁻³, δ=%0.1f", pm.U₀, 10^3*pm.Ñ, delta)
-
-xlocat = 19
-
-N21 = interior(N2_timeseries)[xlocat, :,:, 1] 
-
-anim = @animate for (i, t) in enumerate(b_timeseries.times)
-        @info "Plotting frame $i of $(length(b_timeseries.times))..."
-    
-        v = v_timeseries[i]
-        b = b_timeseries[i]
-        cg = cg_timeseries[i]
-        cs = cs_timeseries[i]
-        ε  = ε_timeseries[i]
-        N2  = N2_timeseries[i]
-
-        vi = interior(v)[xlocat, :,:]
-        bi = interior(b)[xlocat, :,:]
-        cgi = interior(cg)[xlocat, :,:]
-        csi = interior(cs)[xlocat, :,:]
-        εi = interior(ε)[xlocat, :,:]
-        N2i = interior(N2)[xlocat, :,:] .- N21
-
-        #MOMENTUM PLOTS
-                 
-        v_plot = heatmap(yv, zv, vi'; color = :balance, ylabel = "z",
-                        guidefontsize = 14, titlefont=14, tickfont = 8, xticks=false,
-                        clims = (-pm.U₀, pm.U₀), left_margin = 10.0mm, right_margin = 5.0mm, 
-                        kwargs...)
-                 plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-    
-        # DYE
-        cs_plot = heatmap(yc, zc, log10.(clamp.(csi, 10^(-8), 1))'; color = :thermal,
-                        guidefontsize = 14, titlefont=14, tickfont = 8, ylabel = "z", xticks=false,
-                        clims = (-4, 0), right_margin = 5.0mm, kwargs...)
-                plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-    
-        cg_plot = heatmap(yc, zc, log10.(clamp.(cgi, 10^(-8), 1))'; color = :thermal,
-                guidefontsize = 14, titlefont=14, tickfont = 8, ylabel = "z", xlabel = "y",
-                clims = (-4, 0), right_margin = 5.0mm, kwargs...)
-        plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-
-        #last column
-        b_plot = heatmap(yc, zc, bi'; color = :thermal, yticks=false, xticks=false,
-                        guidefontsize = 14, titlefont=14, tickfont = 8,  
-                        clims = (-0.007, 0), right_margin = 10.0mm,
-                        kwargs...)
-                    plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-                Plots.contour!(yc, zc, bi'; color=:black, lw=2)
-
-        n_plot = heatmap(yn, zn, (N2i .* 1e5)'; color = :balance, yticks=false, xticks=false,
-                guidefontsize = 14, titlefont=14, tickfont = 8, 
-                clims = (-1.5, 1.5), right_margin = 10.0mm,
-                kwargs...)
-            plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-        
-        e_plot = heatmap(yc, zc, log10.(clamp.(εi, 10^(-10), 1))'; color = :thermal, xlabel = "y", yticks=false,
-            guidefontsize = 14, titlefont=14, tickfont = 8, 
-            clims = (-9, -5), right_margin = 10.0mm,
-            kwargs...)
-        plot!(yc, land, linecolor=:black, lw = 1, legend = false)
-
-        y = 1:5
-    
-        v_title = @sprintf("v velocity at tσ/2π = %.1f", t/pm.Tσ)
-        cs_title = @sprintf("log₁₀Cs at tf/2π = %.1f", t/pm.Tf)
-        cg_title = @sprintf("log₁₀Cg at t = %.1f hrs", t/3600)
-        b_title = @sprintf("buoyancy at t = %.1f hrs", t/3600)
-        n_title = @sprintf("N²'×10⁻⁵ at t = %.1f hrs", t/3600)
-        e_title = @sprintf("ε at t = %.1f hrs", t/3600)
-        
-        BigT = Plots.scatter(y, marker=0, markeralpha=0, annotations=(3, y[3],
-                            Plots.text(big_title)), axis=nothing, grid=false, leg=false,
-                            foreground_color_subplot=colorant"white")
-    
-        data_plots = plot(v_plot, b_plot, cs_plot, n_plot, cg_plot, e_plot,
-                    title = [v_title b_title cs_title n_title cg_title e_title],
-                    layout = (3, 2))
-        fin = Plots.plot(BigT, data_plots, layout=grid(2, 1, heights=[0.05,0.95]))
-end
-
-apath = path_name * "Analysis/"    
-cont_name = apath * "Contours_" * name_prefix
-mp4(anim, cont_name * ".mp4", fps = 8)
-
 
 ##############
 #   CAIRO PLOT MOVIE
 ##############
+
 n = Observable(1)
 xlocat = 19
+telngth = 161
+zlength = 250
+ylength = 1000
 
 v = @lift interior(v_timeseries[$n],xlocat, :, :,);
 b = @lift interior(b_timeseries[$n], xlocat, :, :);
-cg = @lift log10.(clamp.(interior(cg_timeseries[$n],xlocat, :, :), 1e-8,1));
-cs = @lift log10.(clamp.(interior(cs_timeseries[$n], xlocat, :, :), 1e-8,1));
-ε  = @lift log10.(clamp.(interior(ε_timeseries[$n],xlocat, :, :), 1e-10,1));
-N2  = @lift interior(N2_timeseries[$n], xlocat, :, :);
+cg = @lift log10.(clamp.(interior(Cg_timeseries[2 * $n - 1],xlocat, :, :), 1e-8,1));
+cs = @lift log10.(clamp.(interior(Cs_timeseries[2 * $n - 1], xlocat, :, :), 1e-8,1));
+cgr = @lift log10.(clamp.(interior(Cgr_timeseries[$n], xlocat, :, :),  1e-8,1));
 
-title = @lift "Internal Wave Breaking, t = " * string(round(b_timeseries.times[$n]/3600, digits=2)) * " hrs, Tσ = "*string(round(b_timeseries.times[$n]/pm.Tσ, digits=2))
+function cglf(n)
+    if n > spinupL
+        cgl = log10.(clamp.(CGli[xlocat, :, :, n - spinupL],  1e-8,1));
+    else
+        cgl = log10.(clamp.(zeros(1439, 325),  1e-8,1));
+    end
+    return cgl
+end
 
-f = Figure(resolution = (1150, 1200),fontsize=26) 
+cgl = @lift(cglf($n))
+
+function cgl2f(n)
+    if n > spinupL2
+        cgl2 = log10.(clamp.(CGl2i[xlocat, :, :, n - spinupL2],  1e-8,1));
+    else
+        cgl2 = log10.(clamp.(zeros(1439, 325),  1e-8,1));
+    end
+    return cgl2
+end
+cgl2 = @lift(cgl2f($n))
+
+ε = @lift log10.(clamp.(interior(ε_timeseries[$n], xlocat, :, :), 1e-10,1));
+
+title = @lift "Internal Wave Breaking, δ=85.7 m, t = " * string(round(b_timeseries.times[$n]/3600, digits=2)) * " hrs, Tσ = "*string(round(b_timeseries.times[$n]/pm.Tσ, digits=2))
+
+f = Figure(resolution = (1450, 1000),fontsize=26) 
 
 ga = f[1, 1] = GridLayout()
 axv = Axis(ga[1, 1], ylabel = "z [m]")
@@ -222,64 +177,224 @@ axb = Axis(ga[1, 3])
 axcg = Axis(ga[2, 1], ylabel = "z [m]")
 axcs = Axis(ga[2, 3])
 
-axe = Axis(ga[3, 1], ylabel = "z [m]", xlabel = "y [m]")
-axn = Axis(ga[3, 3], xlabel = "y [m]")
+axcgl = Axis(ga[3, 1], ylabel = "z [m]")
+axcgl2 = Axis(ga[3, 3])
+
+axe = Axis(ga[4, 1], ylabel = "z [m]", xlabel = "y [m]")
+axn = Axis(ga[4, 3], xlabel = "y [m]")
 
 axe.xticks = 500:1000:1500
 axn.xticks = 500:1000:1500
 
 axv.yticks = [-250, 0]
 axcg.yticks = [-250, 0]
+axcgl.yticks = [-250, 0]
 axe.yticks = [-250, 0]
 
-limits!(axv, 0, 2000, -450, 0)
-limits!(axcg, 0, 2000, -450, 0)
-limits!(axcs, 0, 2000, -450, 0)
-limits!(axb, 0, 2000, -450, 0)
-limits!(axe, 0, 2000, -450, 0)
-limits!(axn, 0, 2000, -450, 0)
+limits!(axv, 0, 2000, -500, 0)
+limits!(axcg, 0, 2000, -500, 0)
+limits!(axcs, 0, 2000, -500, 0)
+limits!(axcgl, 0, 2000, -500, 0)
+limits!(axcgl2, 0, 2000, -500, 0)
+limits!(axb, 0, 2000, -500, 0)
+limits!(axe, 0, 2000, -500, 0)
+limits!(axn, 0, 2000, -500, 0)
 
 hidedecorations!(axb)
 hidedecorations!(axcs)
 hidexdecorations!(axv)
 hidexdecorations!(axcg)
+hidexdecorations!(axcgl)
+hidedecorations!(axcgl2)
 hideydecorations!(axn)
 
+# inlcude lines where split happens in bflux:
+# z = -334 and -168
+z1 = -334
+z2 = -168
+y1 = -z1/pm.Tanα
+y2 = -z2/pm.Tanα
+
+land_pdel = (curvedslope.(yc) .+ delta)[1:382]
+
 global hmv = heatmap!(axv, yv, zv, v, colormap = :balance, colorrange = (-pm.U₀, pm.U₀))
-lines!(axv, yc, land, color=:black, lw = 4)
+lines!(axv, yc, land, color=:black, linewidth = 3)
+lines!(axv, yc[1:382], land_pdel, color=:black, linewidth = 2, linestyle = :dash)
+lines!(axv, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray30, linewidth = 2)
+lines!(axv, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray30, linewidth = 2)
 
 global hmb = heatmap!(axb, yc, zc, b, colormap= :thermal, colorrange = (-0.007, 0),)
-contour!(axb, yc, zc, b, color = :black, lw = 6, levels = -0.006:0.001:0, alpha = 0.5)
-lines!(axb, yc, land, color=:black, lw = 4)
+contour!(axb, yc, zc, b, color = :black, linewidth = 2 , levels = -0.006:0.0005:0, alpha = 0.5)
+lines!(axb, yc, land, color=:black, linewidth = 3)
+lines!(axb, yc[1:382], land_pdel, color=:black, linewidth = 2, linestyle = :dash)
+lines!(axb, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray30, linewidth = 2)
+lines!(axb, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray30, linewidth = 2)
 
 global hmcg = heatmap!(axcg, yc, zc, cg, colormap = :thermal, colorrange = (-4, 0))
-lines!(axcg, yc, land, color=:black, lw = 4)
+lines!(axcg, yc, land, color=:black, linewidth = 3)
+lines!(axcg, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcg, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcg, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
 
 global hmcs = heatmap!(axcs, yc, zc, cs, colormap = :thermal, colorrange = (-4, 0))
-lines!(axcs, yc, land, color=:black, lw = 4)
+lines!(axcs, yc, land, color=:black, linewidth = 3)
+lines!(axcs, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcs, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcs, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
+
+global hmcgl = heatmap!(axcgl, yc[1:1000], zc, cgl, colormap = :thermal, colorrange = (-4, 0))
+lines!(axcgl, yc, land, color=:black, linewidth = 3)
+lines!(axcgl, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcgl, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcgl, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
+
+global hmcgl2 = heatmap!(axcgl2, yc[1:1000], zc, cgl2, colormap = :thermal, colorrange = (-4, 0))
+lines!(axcgl2, yc, land, color=:black, linewidth = 3)
+lines!(axcgl2, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcgl2, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcgl2, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
 
 global hme = heatmap!(axe, yc, zc, ε, colormap = :thermal, colorrange = (-9, -5))
-lines!(axe, yc, land, color=:black, lw = 4)
+lines!(axe, yc, land, color=:black, linewidth = 3)
+lines!(axe, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axe, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axe, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
 
-global hmn= heatmap!(axn, yn, zn, N2, colormap = :balance, colorrange = (-1.5e-5, 1.5e-5))
-lines!(axn, yc, land, color=:black, lw = 4)
+global hmn= heatmap!(axn, yc, zc, cgr, colormap = :thermal, colorrange = (-4, 0))
+lines!(axn, yc, land, color=:black, linewidth = 3)
+lines!(axn, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axn, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axn, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
 
+Label(ga[1, 1:4, Top()], title,
+                fontsize = 30,
+                font = :bold,
+                padding = (5, 5, 5, 5),
+                halign = :left)
+
+cb1 = Colorbar(ga[1,2], hmv, ticks = (-0.2:.1:0.2), size =35)
+cb2 = Colorbar(ga[1,4], hmb, ticks = (-5e-3:2e-3:-1e-3, ["-0.005", "-0.003", "-0.001"] ), size = 35)
+cb3 = Colorbar(ga[2:3,2], hmcg, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ), size = 35)
+cb4 = Colorbar(ga[2:4,4], hmcs, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ), size = 35)
+cb5 = Colorbar(ga[4,2], hme, ticks =  (-9:1:-6, ["10⁻⁹", "10⁻⁸", "10⁻⁷", "10⁻⁶"] ), size = 35)
+
+colsize!(ga, 2, Relative(0.04))
+colsize!(ga, 4, Relative(0.04))
+
+colgap!(ga, 15)
+rowgap!(ga, 5)
+
+savename = "contours_allg_" * setname
+apath  = path_name * "Analysis/"
+
+frames = 1:length(b_timeseries.times)
+record(f, apath * savename * ".mp4", frames, framerate=8) do j
+    msg = string("Plotting frame ", j, " of ", frames[end])
+    print(msg * " \r")
+    n[] = j
+end
+
+##############
+#   MOVIE OF BETTER TIME RESOLUTION
+##############
+
+n = Observable(1)
+xlocat = 19
+zlength = 250
+ylength = 1000
+
+v = @lift interior(v_timeseries[$n],xlocat, :, :,);
+b = @lift interior(b_timeseries[$n], xlocat, :, :);
+cg = @lift log10.(clamp.(interior(Cg_timeseries[$n],xlocat, :, :), 1e-8,1));
+cs = @lift log10.(clamp.(interior(Cs_timeseries[$n],xlocat, :, :), 1e-8,1));
+
+function titlef(n)
+    if in(n, negleaps .+ 1)
+        title  = "Internal Wave Breaking, δ=85.7 m, Tσ = " * string(round(b_timeseries.times[n]/pm.Tσ, digits=2) ) * " (b̄↓)"
+    else
+        title  = "Internal Wave Breaking, δ=85.7 m, Tσ = "*string(round(b_timeseries.times[n]/pm.Tσ, digits=2))
+    end
+    return title
+end
+
+title = @lift(titlef($n))
+
+f = Figure(resolution = (1450, 800),fontsize=26) 
+
+ga = f[1, 1] = GridLayout()
+axv = Axis(ga[1, 1], ylabel = "z [m]")
+axb = Axis(ga[1, 3])
+
+axcg = Axis(ga[2, 1], ylabel = "z [m]", xlabel = "y [m]")
+axcs = Axis(ga[2, 3], xlabel = "y [m]")
+
+axcg.xticks = 500:1000:1500
+axcs.xticks = 500:1000:1500
+
+axcs.yticks = [-250, 0]
+axv.yticks = [-250, 0]
+
+limits!(axv, 0, 2000, -500, 0)
+limits!(axcg, 0, 2000, -500, 0)
+limits!(axcs, 0, 2000, -500, 0)
+limits!(axb, 0, 2000, -500, 0)
+
+hidedecorations!(axb)
+hidexdecorations!(axv)
+hideydecorations!(axcs)
+
+# inlcude lines where split happens in bflux:
+# z = -334 and -168
+z1 = -334
+z2 = -168
+y1 = -z1/pm.Tanα
+y2 = -z2/pm.Tanα
+
+land_pdel = (curvedslope.(yc) .+ delta)[1:382]
+
+global hmv = heatmap!(axv, yv, zv, v, colormap = :balance, colorrange = (-pm.U₀, pm.U₀))
+lines!(axv, yc, land, color=:black, linewidth = 3)
+lines!(axv, yc[1:382], land_pdel, color=:black, linewidth = 2, linestyle = :dash)
+lines!(axv, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray30, linewidth = 2)
+lines!(axv, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray30, linewidth = 2)
+
+global hmb = heatmap!(axb, yc, zc, b, colormap= :thermal, colorrange = (-0.007, 0),)
+contour!(axb, yc, zc, b, color = :black, linewidth = 2 , levels = -0.006:0.0005:0, alpha = 0.5)
+lines!(axb, yc, land, color=:black, linewidth = 3)
+lines!(axb, yc[1:382], land_pdel, color=:black, linewidth = 2, linestyle = :dash)
+lines!(axb, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray30, linewidth = 2)
+lines!(axb, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray30, linewidth = 2)
+
+global hmcg = heatmap!(axcg, yc, zc, cg, colormap = :thermal, colorrange = (-4, 0))
+lines!(axcg, yc, land, color=:black, linewidth = 3)
+lines!(axcg, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcg, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcg, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
+
+global hmcs = heatmap!(axcs, yc, zc, cs, colormap = :thermal, colorrange = (-4, 0))
+lines!(axcs, yc, land, color=:black, linewidth = 3)
+lines!(axcs, yc[1:382], land_pdel, color=:white, linewidth = 2, linestyle = :dash)
+lines!(axcs, 1:1:y1, ones(round(Int,y1)).* z1, color = :gray70, linewidth = 2)
+lines!(axcs, 1:1:y2, ones(round(Int,y2)).* z2, color = :gray70, linewidth = 2)
+
+Label(ga[1, 1:2, Top()], title,
+                fontsize = 30,
+                font = :bold,
+                padding = (5, 5, 5, 5),
+                halign = :left)
 
 cb1 = Colorbar(ga[1,2], hmv, ticks = (-0.2:.1:0.2), size =35)
 cb2 = Colorbar(ga[1,4], hmb, ticks = (-5e-3:2e-3:-1e-3, ["-0.005", "-0.003", "-0.001"] ), size = 35)
 cb3 = Colorbar(ga[2,2], hmcg, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ), size = 35)
 cb4 = Colorbar(ga[2,4], hmcs, ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ), size = 35)
-cb5 = Colorbar(ga[3,2], hme, ticks = (-9:2:-4, ["10⁻⁹", "10⁻⁷", "10⁻⁵"] ), size = 35)
-cb6 = Colorbar(ga[3,4], hmn, ticks = (-1e-5:1e-5:1e-5, ["-10⁻⁵", "0", "10⁻⁵"] ), size = 35)
 
 colsize!(ga, 2, Relative(0.04))
 colsize!(ga, 4, Relative(0.04))
 
-
 colgap!(ga, 15)
 rowgap!(ga, 5)
 
-savename = "contours_m_" * setname
+savename = "contours_smdt_" * setname
 apath  = path_name * "Analysis/"
 
 frames = 1:length(b_timeseries.times)

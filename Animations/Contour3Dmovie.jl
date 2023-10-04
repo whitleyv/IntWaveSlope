@@ -74,9 +74,10 @@ n = Observable(1)
 ctimes = 0:600:tlength*600
 
 #title = @lift "Internal Wave Breaking, t = " * string(round(c_timeseries.times[$n], digits=2)) * ", Tσ = "*string(round(c_timeseries.times[$n]/pm.Tσ, digits=2))
-title = @lift "Internal Wave Breaking, t = " * string(round(ctimes[$n]/3600, digits=2)) * " hrs, Tσ = "*string(round(ctimes[$n]/pm.Tσ, digits=2))
+title = @lift "Passive Tracer During Internal Wave Breaking, δ = 100 m, t = " * string(round(ctimes[$n]/3600, digits=1)) * " hrs, Tσ = "*string(round(ctimes[$n]/pm.Tσ, digits=2))
 
-f = Figure(resolution = (1500, 550),fontsize=26) 
+#f = Figure(resolution = (1500, 550),fontsize=26) 
+f = Figure(resolution = (1600, 600),fontsize=26) 
 ga = f[1, 1] = GridLayout()
 
 ax1 = Axis3(ga[1, 1], azimuth = π/8, # rotation of plot
@@ -97,17 +98,22 @@ upper = Point3f.(LxCex, yc, curvedslope.(yc));
 band!(ax1, lower, upper, color = (:black, 0.9), shading = true)
 
 c = @lift log10.(clamp.(c_timeseries1[:,:,:,$n], 7e-5,1));
+c_flat = @lift log10.(clamp.(c_timeseries1[cLx,:,:,$n], 7e-5,1));
+
 #c = @lift log10.(clamp.(interior(c_timeseries[$n], :, :, :), 7*1e-5,1))
 
 cg = contour!(ax1, xc, yc, zc, c, levels = (-4:0.05:0), colormap = (:thermal), alpha = 0.15)
+contourf!(ax1, yc, zc, c_flat; levels = (-4:0.05:0), colormap = :thermal,
+    transformation=(:yz, LxCex))
 
 cb = Colorbar(ga[1, 2], limits = (-4,0), colormap = (:thermal), ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ),
     label = "Tracer Concentration",lowclip = :white, size = 25)
 #cb.alignmode = Mixed(right = 0)
+colgap!(ga, -50)
 
-savename = "slope3dwaveseries_" * setname
+savename = "Burgers_slope3dwaveseries_" * setname
 #apath  = path_name * "Analysis/"
-#apath  =  "../Analysis/Plots/"
+apath  =  "Analysis/Plots/"
 
 frames = 1:tlength
 record(f, apath * savename * ".mp4", frames, framerate=8) do j
