@@ -1,0 +1,205 @@
+using Measures
+using Printf
+using JLD2
+using Oceananigans
+using Statistics
+using CairoMakie
+
+path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+
+setname = "U250N100Lz100g100"
+include("parameters.jl")
+
+pm = getproperty(SimParams(), Symbol(setname))
+
+pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
+                Tanα = pm.γ * sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
+                nz = round(Int,pm.Lz/2),
+                m = -π/pm.Lz,
+                l = sqrt(((π/pm.Lz)^2 * (pm.f^2 - pm.σ^2)) / (pm.σ^2 - pm.Ñ^2)),
+                Tf = 2*π/pm.f, 
+                Tσ = 2*π/pm.σ))
+
+const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
+const gausT_width = 180
+const ySlopeSame = 1336.6                           # point where planar and curved corner math up the best
+
+ΔySlopeSame = 0
+
+@inline heaviside(X) = ifelse(X < 0, 0., 1.) # heaviside returns 1 if x >= 0
+# exponential gaussian for curved corner
+@inline expcurve(y, ystar, smo) = -pm.Lzˢ + pm.Lzˢ * exp( - (y - ystar)^2 / (2*smo^2))
+# planar slope line
+@inline linslope(y) = -pm.Tanα * y
+# combining the 2 with heaviside split at ySlopeSame
+@inline curvedslope(y) = @. linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
+
+@info "getting data from: " * setname
+
+name_prefix = "IntWave_" * setname
+filepath = path_name * name_prefix * ".jld2"
+@info "getting data from: " * setname
+
+c_timeseries = FieldTimeSeries(filepath, "Cs");
+xc, yc, zc = nodes(c_timeseries) #CCC
+
+land = curvedslope.(yc) 
+
+lastH = 450 #start at z = -50 (used to be -250)
+firstH = 50 #end at z = -450
+
+# indices to start and stop 
+z_st = round(Int, lastH/2) # start at z = -50
+z_en = round(Int, firstH/2) # end at z = -450 (smaller indices = deeper)
+y_st = round(Int, ((pm.Lz-lastH)/pm.Tanα)/4) # find corresponding y value on slope when z = -50
+y_en = round(Int, 2500/4) # just choosing this y value to include most of dye excursions
+
+zlength_sm = length(z_en:z_st)
+ylength_sm = length(y_st:y_en)
+
+isemp(A) = length(A) < 1
+isNemp(A) = length(A) > 1
+thresh(z) = z>=10^(-6)
+cond_gt0(y) = y > 0 
+cond_lt0(y) = y < 0
+cond_lte0(y) = y <= 0
+cond_gt1(y) = y > 1 # find next overturn
+cond_gt4(y) = y > 4 # cutoff for overturns
+
+# rolling averages width
+rolWidy = 20
+rolWidz = 3
+
+# number of individual results to log at each (y,t) location
+numRes = 25
+
+#choosing a good time index
+tdx = 160
+
+@info "Pulling Dye values at given time..."
+
+# pulling c values at time step
+c = c_timeseries[tdx]
+# averaging in x and cutting z range
+ci = mean(interior(c)[:,:, z_en:z_st], dims =1)[1,:,:]
+# averaging in x and not cutting z range
+cifull = mean(interior(c), dims =1)[1,:,:]
+
+zlength = length(zc)
+
+# averaging rolling window
+
+# yi = y index in cut range
+# y_md y index from total range
+yi= 560
+y_md = 560 + y_st - 1
+
+# rolling average at the one y val we wanted in the cut z range
+cmi = mean(ci[y_md-rolWidy:rolWidy+y_md, :], dims = 1)
+
+Δc = cmi[1:end-1]-cmi[2:end]
+dcdz = Δc /-2
+
+
+@info "Finidng all tracer minima..."
+
+# finding all "roots"
+roots = []
+for k = 2:length(dcdz)-2
+    if dcdz[k] <= 0 && dcdz[k+1] >0
+        roots = [roots;k]
+    end
+end
+
+top_cond(z) = z>=curvedslope(yc[y_md])
+# first index above the slope, fy : end in the fluid
+fy = findfirst(top_cond, zc)
+# cutting off any roots that are within 4 indices of bottom (6m)
+cutbot = sum( roots .< fy + 3)
+roots = roots[cutbot+1:end]
+
+rt_widths = []
+new_roots_bot = []
+new_roots_top = []
+
+for p = 2:length(roots)
+    maxc = maximum(cmi[roots[p-1]:roots[p]])
+    minr = maxc*.5 
+    if maxc > 10^(-4) && cmi[roots[p]] <= minr && cmi[roots[p-1]] <= minr
+        rng = roots[p-1]:roots[p]
+        fr = findfirst(thresh, cmi[rng])
+        lr = findfirst(thresh, reverse(cmi[rng]))
+        newr1 = roots[p-1] + fr -1
+        newr2 = roots[p] - lr
+        z1 = zc[newr1 + z_en]
+        z2 = zc[newr2 + z_en]
+        new_wid = z2-z1
+        new_roots_bot = [new_roots_bot; newr1]
+        new_roots_top = [new_roots_top; newr2]
+        rt_widths=[rt_widths; new_wid]
+    end
+end
+
+@info "Plotting Appendix Plot..."
+
+# cmifull is length(y_st:100) and full zlength but with y rolling average
+# ci full is just x averaged with full y and z1
+# cmi is length(y_st:y_en) ie ylength_sm and zlength_sm
+
+cifull_log = log10.(clamp.(cifull, 1e-15, 1e-0))
+cmi_logy = log10.(clamp.(cmi, 1e-15, 1e-0))
+
+f = Figure(resolution = (1000, 700), fontsize=26)
+ga = f[1, 1] = GridLayout()
+gb = f[1, 2] = GridLayout()
+
+axtop = Axis(ga[2, 1], ylabel = "z [m]", xlabel = "y[m]",
+title = "Tracer at t = 26.7 hrs = 11 Tσ")
+axtop.xticks = 1000:1000:3000
+axtop.yticks = -400:200:-200
+limits!(axtop, 138, 3400, -450, -50)
+
+δ = pm.U₀/pm.Ñ
+
+axrt = Axis(gb[1, 1], xlabel = "Concentration", ylabel = "z [m]", 
+title ="Tracer at y = 2374 m")
+# we want a log y axis with ticks at -8 through 0
+axrt.xticks = (-10:4:-2, ["10⁻¹⁰", "10⁻⁶","10⁻²"])
+axrt.yticks = -400:100:-100
+limits!(axrt, -15, 0, -450, -100)
+
+hmc = heatmap!(axtop, yc, zc, cifull_log, colormap= :thermal, colorrange = (-6, 0),)
+lines!(axtop, yc, land, color=:black, lw = 4)
+ploc = lines!(axtop, yc[y_md].*ones(zlength_sm), zc[z_en:z_st], linewidth = 6, color = :dodgerblue2)
+
+del = hspan!(axrt, zc[new_roots_bot .+ z_en],zc[new_roots_top .+ z_en], color = (:firebrick2, 0.2),)
+pf = lines!(axrt, vec(cmi_logy), zc[z_en:z_st], color = :gray, linewidth = 7,)
+thp = lines!(axrt, -6 .* ones(zlength_sm), zc[z_en:z_st], color = :black, linewidth = 2, linestyle = :dash)
+#text!(axrt, Point.(-6, -130), text = " Threshold", align = (:left, :center), color = :black,
+#                fontsize = 26)
+minp = scatter!(axrt, cmi_logy[new_roots_bot], zc[new_roots_bot .+ z_en], 
+    marker=:rect, markersize = 20, color = :dodgerblue2,
+    strokecolor = :black, strokewidth = 1)
+scatter!(axrt, cmi_logy[new_roots_top], zc[new_roots_top .+ z_en], 
+    marker=:rect, markersize = 20, color = :dodgerblue2,
+    strokecolor = :black, strokewidth = 1)
+for (i, wd) in enumerate(rt_widths)
+    zval = zc[new_roots_bot .+ z_en][i] .+ 7
+    dellabel =  @sprintf("%0.0f m = %0.1f δ", wd, wd/(pm.U₀/pm.Ñ)) 
+    text!(axrt, Point.(-6.4, zval), text = dellabel, align = (:right, :center), color = :black,
+                fontsize = 26)
+end
+
+leg = Legend(ga[1, 1], 
+[ploc, pf, thp, minp, del], tellheight = false,
+["Profile Location", "Profile", "Measuring Threshold", "Minima After Filtering", "Measured Thickness Between Minima"])
+
+colsize!(f.layout, 2, Auto(.8))
+rowsize!(ga, 1, Auto(.7))
+rowgap!(ga, 15)
+
+apath = path_name * "Analysis/"
+
+savename = apath * "Poster_profileLth_" * setname 
+save(savename * ".png", f)
+
