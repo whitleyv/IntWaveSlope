@@ -11,9 +11,9 @@ ENV["GKSwstype"] = "nul" # if on remote HPC
 path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/Analysis/"
 sn = "U300N100Lz100g100"
 
-filescalename1 = path_name * "BFluxTrip_beg_" * sn * ".jld2"
-filescalename2 = path_name * "BFluxTrip_mid_" * sn * ".jld2"
-filescalename3 = path_name * "BFluxTrip_end_" * sn * ".jld2"
+filescalename1 = path_name * "BFluxTrip_beg_mp_" * sn * ".jld2"
+filescalename2 = path_name * "BFluxTrip_mid_mp_" * sn * ".jld2"
+filescalename3 = path_name * "BFluxTrip_end_mp_" * sn * ".jld2"
 
 include("parameters.jl") 
 pm = getproperty(SimParams(), Symbol(sn))
@@ -29,7 +29,7 @@ pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
 scale_file1 = jldopen(filescalename1, "r+")
 scale_file2 = jldopen(filescalename2, "r+")
 scale_file3 = jldopen(filescalename3, "r+")
-                       
+#SGS_file = jldopen(SGSname, "r+")                 
 skeys = keys(scale_file1)
 
 FluxDiv_turbWavg_beg  = scale_file1[skeys[1]];
@@ -37,22 +37,29 @@ FluxDiv_phasedepWavg_beg  = scale_file1[skeys[2]];
 PhaseDependentVals_beg  = scale_file1[skeys[3]];
 TurbVals_beg  = scale_file1[skeys[4]];
 WaveAveragedVals_beg  = scale_file1[skeys[5]];
+FluxVals_beg = scale_file1[skeys[6]];
 
-yb = scale_file1[skeys[6]];
-zb = scale_file1[skeys[7]];
-phase_times = scale_file1[skeys[8]];
+yb = scale_file1[skeys[7]];
+zb = scale_file1[skeys[8]];
+phase_times = scale_file1[skeys[9]];
 
 FluxDiv_turbWavg_mid = scale_file2[skeys[1]];
 FluxDiv_phasedepWavg_mid = scale_file2[skeys[2]];
 PhaseDependentVals_mid = scale_file2[skeys[3]];
 TurbVals_mid = scale_file2[skeys[4]];
 WaveAveragedVals_mid = scale_file2[skeys[5]];
+FluxVals_mid = scale_file2[skeys[6]];
 
 FluxDiv_turbWavg_end  = scale_file3[skeys[1]];
 FluxDiv_phasedepWavg_end  = scale_file3[skeys[2]];
 PhaseDependentVals_end  = scale_file3[skeys[3]];
 TurbVals_end  = scale_file3[skeys[4]];
 WaveAveragedVals_end  = scale_file3[skeys[5]];
+FluxVals_end = scale_file3[skeys[6]];
+
+#SGS_Vals_beg = SGS_file["WaveAveragedVals_beg"]
+#SGS_Vals_mid = SGS_file["WaveAveragedVals_mid"]
+#SGS_Vals_end = SGS_file["WaveAveragedVals_end"]
 
 # curved topo parameters
 const gausT_center = 895                                 # gaussian paramereters for curved "corner" of slope
@@ -84,6 +91,10 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 
 land = curvedslope.(yb)
 land_pdel = (curvedslope.(yb) .+ pm.U₀/pm.Ñ)[1:382]
+
+###########################
+#   PLOT of phase and turbulent fluxes, divergences of fluxes, sgs, and sum
+###########################
 
 zlength = length(zb)
 ylength = 880
@@ -239,9 +250,9 @@ function WaveAverageFluxPlot(savename, apath , ylength, vb_phasedepWavg, wb_phas
     save(apath * savename * ".png", f1)
 end
 
-vmax = round(maximum(WaveAveragedVals_beg.v_Wavg)*1e2)*1e-2
-nabmax = round(maximum(abs.(FluxDiv_phasedepWavg_beg.vb_phasedepWavg_dy))*1e7)*1e-7*0.25
-SGSmax = round(maximum(FluxDiv_Wavg_beg.wb_xpertxavgWavg_dz)*1e7)*1e-7*0.25
+###########################
+#   PLOT of phase and turbulent divergences of fluxes, sgs, and sum
+###########################
 
 function WaveAverageFluxPlot(savename, apath , ylength, v_Wavg, ∇_phasedepWavg, 
     ∇_turbWavg, SGS_Wavg, c_Wavg, vmax, nabmax, SGSmax)
@@ -253,8 +264,8 @@ function WaveAverageFluxPlot(savename, apath , ylength, v_Wavg, ∇_phasedepWavg
     gradblims = (-nabmax, nabmax)
     SGSlims = (-SGSmax, SGSmax)
 
-    Full∇_Wavg = ∇_turbWavg + ∇_phasedepWavg
-    Fulldbdt_Wavg = (-1 .* Full∇_Wavg) + SGS_Wavg[2:end,2:end]
+    Full∇_Wavg = -1 .* (∇_turbWavg + ∇_phasedepWavg)
+    Fulldbdt_Wavg = Full∇_Wavg + SGS_Wavg[2:end,2:end]
 
     yb_cut = yb[1:ylength]
 
@@ -309,13 +320,13 @@ function WaveAverageFluxPlot(savename, apath , ylength, v_Wavg, ∇_phasedepWavg
     hnab = heatmap!(axgrad, yb_cut[2:end], zb[2:end], Full∇_Wavg, colormap = :balance, colorrange = gradblims)
         lines!(axgrad, yb, land, color=:black, lw = 4)
         lines!(axgrad, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-        text!(axgrad, Point.(50, -450), text = "∇⋅⟨u⃗'b'⟩ + ∇⋅⟨u⃗̃b̃⟩", align = (:left, :center), color = :black, 
+        text!(axgrad, Point.(50, -450), text = "-∇⋅⟨u⃗'b'⟩ - ∇⋅⟨u⃗̃b̃⟩", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
 
-    hnab1 = heatmap!(axvbh, yb_cut, zb, ∇_phasedepWavg, colormap = :balance, colorrange = gradblims)
+    hnab1 = heatmap!(axvbh, yb_cut, zb, -1 .* ∇_phasedepWavg, colormap = :balance, colorrange = gradblims)
         lines!(axvbh, yb, land, color=:black, lw = 4)
         lines!(axvbh, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-        text!(axvbh, Point.(50, -450), text = "∇⋅⟨u⃗̃b̃⟩", align = (:left, :center), color = :black, 
+        text!(axvbh, Point.(50, -450), text = "-∇⋅⟨u⃗̃b̃⟩", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
         contour!(axvbh, yb_cut, zb, clog, color = :gray30, linewidth = 2, levels = -5:1:0)
 
@@ -324,12 +335,14 @@ function WaveAverageFluxPlot(savename, apath , ylength, v_Wavg, ∇_phasedepWavg
         lines!(axdyvb, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
         text!(axdyvb, Point.(50, -450), text = "SGS", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)        
+        contour!(axdyvb, yb_cut, zb, clog, color = :gray30, linewidth = 2, levels = -5:1:0)
 
-    hnab2 = heatmap!(axwbh, yb_cut, zb, ∇_turbWavg, colormap = :balance, colorrange = gradblims)
+    hnab2 = heatmap!(axwbh, yb_cut, zb, -1 .* ∇_turbWavg, colormap = :balance, colorrange = gradblims)
         lines!(axwbh, yb, land, color=:black, lw = 4)
         lines!(axwbh, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-        text!(axwbh, Point.(50, -450), text = "∇⋅⟨u⃗'b'⟩", align = (:left, :center), color = :black, 
+        text!(axwbh, Point.(50, -450), text = "-∇⋅⟨u⃗'b'⟩", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
+        contour!(axwbh, yb_cut, zb, clog, color = :gray30, linewidth = 2, levels = -5:1:0)
         contour!(axwbh, yb_cut, zb, clog, color = :gray30, linewidth = 2, levels = -5:1:0)
 
 
@@ -338,6 +351,7 @@ function WaveAverageFluxPlot(savename, apath , ylength, v_Wavg, ∇_phasedepWavg
         lines!(axdzwb, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
         text!(axdzwb, Point.(50, -450), text = "∂ₜ⟨b⟩", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
+        contour!(axdzwb, yb_cut, zb, clog, color = :gray30, linewidth = 2, levels = -5:1:0)
 
     # create colorbars the size of the whole data set
     cb1 = Colorbar(gcb1[1,1], hv, ticks = (-vmax:vmax:vmax), size =35,vertical = false)
@@ -365,39 +379,207 @@ v_Wavg_begxavg = mean(WaveAveragedVals_beg.v_Wavg, dims = 1)[1,:,:];
 ∇_phasedepWavg_begxavg = mean(FluxDiv_phasedepWavg_beg.∇_phasedepWavg, dims = 1)[1,:,:];
 ∇_turbWavg_begxavg = mean(FluxDiv_turbWavg_beg.∇_turbWavg, dims = 1)[1,:,:];
 c_Wavg_begxavg = mean(WaveAveragedVals_beg.c_Wavg, dims = 1)[1,:,:];
-SGS_Wavg_begxavg = mean(WaveAveragedVals_beg.SGS_Wavg, dims = 1)[1,:,:];
+#SGS_Wavg_begxavg = mean(WaveAveragedVals_beg.SGS_Wavg, dims = 1)[1,:,:];
+SGS_Wavg_begxavg = mean(SGS_Vals_beg.SGS_Wavg, dims = 1)[1,:,:];
 
 v_Wavg_endxavg = mean(WaveAveragedVals_end.v_Wavg, dims = 1)[1,:,:];
 ∇_phasedepWavg_endxavg = mean(FluxDiv_phasedepWavg_end.∇_phasedepWavg, dims = 1)[1,:,:];
 ∇_turbWavg_endxavg = mean(FluxDiv_turbWavg_end.∇_turbWavg, dims = 1)[1,:,:];
-c_Wavg_endxavg = mean(WaveAveragedVals_end.CGl_Wavg, dims = 1)[1,1:ylength,:];
-SGS_Wavg_endxavg = mean(WaveAveragedVals_end.SGS_Wavg, dims = 1)[1,:,:];
+c_Wavg_endxavg = mean(WaveAveragedVals_end.c_Wavg, dims = 1)[1,:,:];
+#SGS_Wavg_endxavg = mean(WaveAveragedVals_end.SGS_Wavg, dims = 1)[1,:,:];
+SGS_Wavg_endxavg = mean(SGS_Vals_end.SGS_Wavg, dims = 1)[1,:,:];
 
 v_Wavg_midxavg = mean(WaveAveragedVals_mid.v_Wavg, dims = 1)[1,:,:];
 ∇_phasedepWavg_midxavg = mean(FluxDiv_phasedepWavg_mid.∇_phasedepWavg, dims = 1)[1,:,:];
 ∇_turbWavg_midxavg = mean(FluxDiv_turbWavg_mid.∇_turbWavg, dims = 1)[1,:,:];
-c_Wavg_midxavg = mean(WaveAveragedVals_mid.CGl_Wavg, dims = 1)[1,1:ylength,:];
-SGS_Wavg_midxavg = mean(WaveAveragedVals_mid.SGS_Wavg, dims = 1)[1,:,:];
+c_Wavg_midxavg = mean(WaveAveragedVals_mid.c_Wavg, dims = 1)[1,:,:];
+#SGS_Wavg_midxavg = mean(WaveAveragedVals_mid.SGS_Wavg, dims = 1)[1,:,:];
+SGS_Wavg_midxavg = mean(SGS_Vals_mid.SGS_Wavg, dims = 1)[1,:,:];
 
 vmax = round(maximum(v_Wavg_begxavg)*1e2)*1e-2
 nabmax1 = maximum((maximum(abs.(∇_phasedepWavg_begxavg)), maximum(abs.(∇_turbWavg_begxavg))))
 nabmax = round(maximum(abs.(nabmax1))*1e7)*1e-7*0.25
-SGSmax = round(maximum(SGS_Wavg_begxavg)*1e8)*1e-8*0.25
+SGSmax = round(maximum(SGS_Wavg_begxavg)*1e8)*1e-8*0.01
 
-WaveAverageFluxPlot("blfuxtrip_Wavg_beg" * sn,  path_name, ylength, 
+WaveAverageFluxPlot("blfuxtrip_Wavg_full_mp_" * sn,  path_name * "Analysis/", ylength, 
 v_Wavg_begxavg, ∇_phasedepWavg_begxavg, ∇_turbWavg_begxavg,
 SGS_Wavg_begxavg, c_Wavg_begxavg, vmax, nabmax, SGSmax)
 
-WaveAverageFluxPlot("blfuxtrip_Wavg_end" * sn,  path_name, ylength, 
+WaveAverageFluxPlot("blfuxtrip_Wavg_beg_mp_" * sn,  path_name, ylength, 
+v_Wavg_begxavg, ∇_phasedepWavg_begxavg, ∇_turbWavg_begxavg,
+SGS_Wavg_begxavg, c_Wavg_begxavg, vmax, nabmax, SGSmax)
+
+WaveAverageFluxPlot("blfuxtrip_Wavg_end_mp_" * sn,  path_name, ylength, 
     v_Wavg_endxavg, ∇_phasedepWavg_endxavg, ∇_turbWavg_endxavg,
     SGS_Wavg_endxavg, c_Wavg_endxavg,
     vmax, nabmax, SGSmax)
 
-WaveAverageFluxPlot("blfuxtrip_Wavg_mid" * sn, path_name, ylength, 
+WaveAverageFluxPlot("blfuxtrip_Wavg_mid_mp_" * sn, path_name, ylength, 
 v_Wavg_midxavg, ∇_phasedepWavg_midxavg, ∇_turbWavg_midxavg,
 SGS_Wavg_midxavg, c_Wavg_midxavg,
     vmax, nabmax, SGSmax)
+
+###########################
+#   PLOT of phase and turbulent fluxes, divergences of fluxes
+###########################
+
+∇_phasedepWavg_begxavg = mean(FluxDiv_phasedepWavg_beg.∇_phasedepWavg, dims = 1)[1,:,:];
+∇_turbWavg_begxavg = mean(FluxDiv_turbWavg_beg.∇_turbWavg, dims = 1)[1,:,:];
+vb_phasedepWavg_begxavg = mean(FluxVals_beg.vb_phasedepWavg, dims = 1)[1,:,:];
+wb_phasedepWavg_begxavg = mean(FluxVals_beg.wb_phasedepWavg, dims = 1)[1,:,:];
+vb_turbWavg_begxavg = mean(FluxVals_beg.vb_turbWavg, dims = 1)[1,:,:];
+wb_turbWavg_begxavg = mean(FluxVals_beg.wb_turbWavg, dims = 1)[1,:,:];
+
+∇_phasedepWavg_endxavg = mean(FluxDiv_phasedepWavg_end.∇_phasedepWavg, dims = 1)[1,:,:];
+∇_turbWavg_endxavg = mean(FluxDiv_turbWavg_end.∇_turbWavg, dims = 1)[1,:,:];
+vb_phasedepWavg_endxavg = mean(FluxVals_end.vb_phasedepWavg, dims = 1)[1,:,:];
+wb_phasedepWavg_endxavg = mean(FluxVals_end.wb_phasedepWavg, dims = 1)[1,:,:];
+vb_turbWavg_endxavg = mean(FluxVals_end.vb_turbWavg, dims = 1)[1,:,:];
+wb_turbWavg_endxavg = mean(FluxVals_end.wb_turbWavg, dims = 1)[1,:,:];
+
+∇_phasedepWavg_midxavg = mean(FluxDiv_phasedepWavg_mid.∇_phasedepWavg, dims = 1)[1,:,:];
+∇_turbWavg_midxavg = mean(FluxDiv_turbWavg_mid.∇_turbWavg, dims = 1)[1,:,:];
+vb_phasedepWavg_midxavg = mean(FluxVals_mid.vb_phasedepWavg, dims = 1)[1,:,:];
+wb_phasedepWavg_midxavg = mean(FluxVals_mid.wb_phasedepWavg, dims = 1)[1,:,:];
+vb_turbWavg_midxavg = mean(FluxVals_mid.vb_turbWavg, dims = 1)[1,:,:];
+wb_turbWavg_midxavg = mean(FluxVals_mid.wb_turbWavg, dims = 1)[1,:,:];
+
+vbmax = round(maximum(vb_phasedepWavg_begxavg)*1e5)*1e-5
+wbmax = round(maximum(wb_phasedepWavg_begxavg)*1e5)*1e-5
+nabmax1 = maximum((maximum(abs.(∇_phasedepWavg_begxavg)), maximum(abs.(∇_turbWavg_begxavg))))
+nabmax = round(maximum(abs.(nabmax1))*1e6)*1e-6*0.25
+
+vbmax = round(maximum(vb_phasedepWavg_endxavg)*1e5)*1e-5
+wbmax = round(maximum(wb_phasedepWavg_endxavg)*1e5)*1e-5
+nabmax1 = maximum((maximum(abs.(∇_phasedepWavg_endxavg)), maximum(abs.(∇_turbWavg_endxavg))))
+nabmax = round(maximum(abs.(nabmax1))*1e6)*1e-6*0.25
+
+function WaveAverageFluxPlot(savename, apath, ylength, ∇_phasedepWavg, 
+    ∇_turbWavg, vb_phasedepWavg, wb_phasedepWavg, 
+    vb_turbWavg, wb_turbWavg, nabmax, vbmax)
+
+    ###[ v'b'p  ][ w'b'p  ][ -∇p        ]
+    ###[ v'b't  ][ w'b't  ][ -∇t        ]
+    vblims = (-vbmax, vbmax)
+    wblims = (-wbmax, wbmax)
+    gradblims = (-nabmax, nabmax)
+        
+    yb_cut = yb[1:ylength]
+        
+    f1 = Figure(resolution = (1300, 1100), fontsize=26)
+        ga = f1[2:3, 1] = GridLayout()    
+        gb = f1[2:3, 2] = GridLayout()
+        gc = f1[2:3, 3] = GridLayout()
     
+        gcb1 = f1[1, 1] = GridLayout()       
+        gcb2 = f1[1, 2] = GridLayout()       
+        gcb3 = f1[1, 3] = GridLayout()       
+    
+        axvbp = Axis(ga[1, 1], ylabel = "z [m]") #v
+        axvbt = Axis(ga[2, 1], ylabel = "z [m]", xlabel = "y [m]") #vh
+        
+        axvbt.xticks = 500:500:1000
+
+        axvbp.yticks = [-250, 0]
+        axvbt.yticks = [-250, 0]
+    
+        axwbp = Axis(gb[1, 1]) #vh'b'
+        axwbt = Axis(gb[2, 1], xlabel = "y [m]") #dy v'b'
+        
+        axgradp = Axis(gc[1, 1]) #wh'b'
+        axgradt = Axis(gc[2, 1], xlabel = "y [m]") #dz w'b'
+        axgradt.xticks = 500:500:1000
+    
+        limits!(axvbp, 0, 1500, -500, 0)
+        limits!(axvbt, 0, 1500, -500, 0)
+        limits!(axwbp, 0, 1500, -500, 0)
+        limits!(axwbt, 0, 1500, -500, 0)
+        limits!(axgradp, 0, 1500, -500, 0)
+        limits!(axgradt, 0, 1500, -500, 0)
+    
+        hidedecorations!(axwbp)
+        hidedecorations!(axgradp)
+        hidexdecorations!(axvbp)
+        hideydecorations!(axwbt)
+        hideydecorations!(axgradt)
+    
+        rowsize!(f1.layout, 1, Relative(0.05))
+    
+        hv = heatmap!(axvbp, yb_cut, zb, vb_phasedepWavg, colormap = :balance, colorrange = vblims)
+            lines!(axvbp, yb, land, color=:black, lw = 4)
+            lines!(axvbp, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axvbp, Point.(50, -450), text = "⟨ṽb̃⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+    
+        hw = heatmap!(axwbp, yb_cut, zb, wb_phasedepWavg, colormap = :balance, colorrange = wblims)
+            lines!(axwbp, yb, land, color=:black, lw = 4)
+            lines!(axwbp, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axwbp, Point.(50, -450), text = "⟨w̃b̃⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+
+        hnab = heatmap!(axgradp, yb_cut[2:end], zb[2:end], -1 .* ∇_phasedepWavg, colormap = :balance, colorrange = gradblims)
+            lines!(axgradp, yb, land, color=:black, lw = 4)
+            lines!(axgradp, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axgradp, Point.(50, -450), text = "- ∇⋅⟨u⃗̃b̃⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+
+        heatmap!(axvbt, yb_cut, zb, vb_turbWavg, colormap = :balance, colorrange = vblims)
+            lines!(axvbt, yb, land, color=:black, lw = 4)
+            lines!(axvbt, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axvbt, Point.(50, -450), text = "⟨v'b'⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+    
+        heatmap!(axwbt, yb_cut, zb, wb_turbWavg, colormap = :balance, colorrange = wblims)
+            lines!(axwbt, yb, land, color=:black, lw = 4)
+            lines!(axwbt, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axwbt, Point.(50, -450), text = "⟨w'b'⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+
+        heatmap!(axgradt, yb_cut[2:end], zb[2:end], -1 .* ∇_turbWavg, colormap = :balance, colorrange = gradblims)
+            lines!(axgradt, yb, land, color=:black, lw = 4)
+            lines!(axgradt, yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
+            text!(axgradt, Point.(50, -450), text = "- ∇⋅⟨u'b'⟩", align = (:left, :center), color = :black, 
+            font = :bold, fontsize = 26)
+    
+        # create colorbars the size of the whole data set
+        cb1 = Colorbar(gcb1[1,1], hv, ticks = (-vbmax/2:vbmax/2:vbmax/2), size =35,vertical = false)
+        cb2 = Colorbar(gcb2[1,1], hw, ticks = (-wbmax/2:wbmax/2:wbmax/2), size =35,vertical = false, )
+        cb3 = Colorbar(gcb3[1,1], hnab, ticks = (-nabmax/2:nabmax/2:nabmax/2), size =35,vertical = false, )
+
+        colgap!(ga, 15)
+        rowgap!(ga, 5)
+        colgap!(gb, 15)
+        rowgap!(gb, 5)
+        colgap!(gc, 15)
+        rowgap!(gc, 5)
+    
+        save(apath * savename * ".png", f1)
+end
+    
+WaveAverageFluxPlot("blfuxtrip_mp_Wavg_beg" * sn,  path_name, ylength, 
+∇_phasedepWavg_begxavg, ∇_turbWavg_begxavg, vb_phasedepWavg_begxavg,
+wb_phasedepWavg_begxavg, vb_turbWavg_begxavg, wb_turbWavg_begxavg, nabmax, vbmax)
+
+WaveAverageFluxPlot("blfuxtrip_mp_Wavg_end_lims_" * sn,  path_name, ylength, 
+∇_phasedepWavg_endxavg, ∇_turbWavg_endxavg, vb_phasedepWavg_endxavg,
+wb_phasedepWavg_endxavg, vb_turbWavg_endxavg, wb_turbWavg_endxavg, nabmax, vbmax)
+
+WaveAverageFluxPlot("blfuxtrip_mp_Wavg_mid" * sn, path_name, ylength, 
+∇_phasedepWavg_midxavg, ∇_turbWavg_midxavg, vb_phasedepWavg_midxavg,
+wb_phasedepWavg_midxavg, vb_turbWavg_midxavg, wb_turbWavg_midxavg, nabmax, vbmax)
+
+WaveAverageFluxPlot("blfuxtrip_mn_Wavg_beg" * sn,  path_name, ylength, 
+∇_phasedepWavg_begxavg, ∇_turbWavg_begxavg, vb_phasedepWavg_begxavg,
+wb_phasedepWavg_begxavg, vb_turbWavg_begxavg, wb_turbWavg_begxavg, nabmax, vbmax)
+
+WaveAverageFluxPlot("blfuxtrip_mn_Wavg_end" * sn,  path_name, ylength, 
+∇_phasedepWavg_endxavg, ∇_turbWavg_endxavg, vb_phasedepWavg_endxavg,
+wb_phasedepWavg_endxavg, vb_turbWavg_endxavg, wb_turbWavg_endxavg, nabmax, vbmax)
+
+WaveAverageFluxPlot("blfuxtrip_mn_Wavg_mid" * sn, path_name, ylength, 
+∇_phasedepWavg_midxavg, ∇_turbWavg_midxavg, vb_phasedepWavg_midxavg,
+wb_phasedepWavg_midxavg, vb_turbWavg_midxavg, wb_turbWavg_midxavg, nabmax, vbmax)
+
 
 #####################
 # Taking a Volume Integral
@@ -546,329 +728,215 @@ clog_mid = log10.(clamp.(c_Wavg_midxavg, 1e-8, 1))
 clog_end = log10.(clamp.(c_Wavg_endxavg, 1e-8, 1))
 
 f1 = Figure(resolution = (2000, 1200), fontsize=26)
-ga = f1[1, 1] = GridLayout() # beg
-gb = f1[2, 1] = GridLayout() # mid
-gc = f1[3, 1] = GridLayout() # end
-gcb = f1[1:3, 2] = GridLayout()
+    ga = f1[1, 1] = GridLayout() # beg
+    gb = f1[2, 1] = GridLayout() # mid
+    gc = f1[3, 1] = GridLayout() # end
+    gcb = f1[1:3, 2] = GridLayout()
 
-axb_p = Axis(ga[1, 1], ylabel = "z [m]") #v
-axm_p = Axis(gb[1, 1], ylabel = "z [m]") #vh
-axe_p = Axis(gc[1, 1], ylabel = "z [m]", xlabel = "y [m]") #vh
+    axb_p = Axis(ga[1, 1], ylabel = "z [m]") #v
+    axm_p = Axis(gb[1, 1], ylabel = "z [m]") #vh
+    axe_p = Axis(gc[1, 1], ylabel = "z [m]", xlabel = "y [m]") #vh
 
-axb_t = Axis(ga[1, 2]) #v
-axm_t = Axis(gb[1, 2]) #vh
-axe_t = Axis(gc[1, 2], xlabel = "y [m]") #vh
+    axb_t = Axis(ga[1, 2]) #v
+    axm_t = Axis(gb[1, 2]) #vh
+    axe_t = Axis(gc[1, 2], xlabel = "y [m]") #vh
 
-axb_tp = Axis(ga[1, 3]) #v
-axm_tp = Axis(gb[1, 3]) #vh
-axe_tp = Axis(gc[1, 3], ylabel = "z [m]", xlabel = "y [m]") #vh
+    axb_tp = Axis(ga[1, 3]) #v
+    axm_tp = Axis(gb[1, 3]) #vh
+    axe_tp = Axis(gc[1, 3], ylabel = "z [m]", xlabel = "y [m]") #vh
 
-axb_tps = Axis(ga[1, 4]) #v
-axm_tps = Axis(gb[1, 4]) #vh
-axe_tps = Axis(gc[1, 4], ylabel = "z [m]", xlabel = "y [m]") #vh
-
-
-axe_p.xticks = 500:500:1500
-axe_t.xticks = 500:500:1500
-axe_tp.xticks = 500:500:1500
-axe_tps.xticks = 500:500:1500
-
-axb_p.yticks = [-250, 0]
-axm_p.yticks = [-250, 0]
-axe_p.yticks = [-250, 0]
-
-limits!(axb_p, 0, 2000, -500, 0)
-limits!(axm_p, 0, 2000, -500, 0)
-limits!(axe_p, 0, 2000, -500, 0)
-limits!(axb_t, 0, 2000, -500, 0)
-limits!(axm_t, 0, 2000, -500, 0)
-limits!(axe_t, 0, 2000, -500, 0)
-limits!(axb_tp, 0, 2000, -500, 0)
-limits!(axm_tp, 0, 2000, -500, 0)
-limits!(axe_tp, 0, 2000, -500, 0)
-limits!(axb_tps, 0, 2000, -500, 0)
-limits!(axm_tps, 0, 2000, -500, 0)
-limits!(axe_tps, 0, 2000, -500, 0)
-
-hidexdecorations!(axb_p)
-hidexdecorations!(axm_p)
-hidedecorations!(axb_t)
-hidedecorations!(axb_tp)
-hidedecorations!(axb_tps)
-hidedecorations!(axm_t)
-hidedecorations!(axm_tp)
-hidedecorations!(axm_tps)
-hideydecorations!(axe_t)
-hideydecorations!(axe_tp)
-hideydecorations!(axe_tps)
-
-colsize!(f1.layout, 2, Relative(0.05))
-
-SGS_boolZY_all_begT_cut = SGS_boolZY_all_begT[2:end, 2:end]
-SGS_boolZY_all_midT_cut = SGS_boolZY_all_midT[2:end, 2:end]
-SGS_boolZY_all_endT_cut = SGS_boolZY_all_endT[2:end, 2:end]
-
-hv = heatmap!(axb_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
-    text!(axb_p, Point.(50, -450), text = "1-4 Tσ", align = (:left, :center), color = :black, 
-    font = :bold, fontsize = 26)
-    contour!(axb_p, yb[1:ylength], zb, clog_beg, color = :black, linewidth = 3, levels = -5:1:0)
-
-hvhat = heatmap!(axm_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
-    text!(axm_p, Point.(50, -450), text = "4-7 Tσ", align = (:left, :center), color = :black, 
-    font = :bold, fontsize = 26)
-    contour!(axm_p, yb[1:ylength], zb, clog_mid, color = :black, linewidth = 3, levels = -5:1:0)
-
-hnab = heatmap!(axe_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
-    text!(axe_p, Point.(50, -450), text = "7-11 Tσ", align = (:left, :center), color = :black, 
-    font = :bold, fontsize = 26)
-    contour!(axe_p, yb[1:ylength], zb, clog_end, color = :black, linewidth = 3, levels = -5:1:0)
-
-heatmap!(axb_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axm_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axe_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
-
-heatmap!(axb_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_begT .+ phasedep_boolZY_all_begT), colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axm_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_midT .+ phasedep_boolZY_all_midT), colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axe_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_endT .+ phasedep_boolZY_all_endT), colormap = :balance, colorrange = (-divext, divext))
-
-heatmap!(axb_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_begT .+ phasedep_boolZY_all_begT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axm_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_midT .+ phasedep_boolZY_all_midT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
-heatmap!(axe_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_endT .+ phasedep_boolZY_all_endT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
-
-# create colorbars the size of the whole data set
-cb1 = Colorbar(gcb[1,1], hnab, ticks = (-8e-5:4e-5:8e-5, ["-8×10⁻⁵", "-4×10⁻⁵", "0",  "-8×10⁻⁵", "-4×10⁻⁵"]), size =35, label = "∂ₜb terms")
-
-colgap!(ga, 15)
-colgap!(gb, 15)
-colgap!(gc, 15)
-
-Label(ga[1, 1, Top()], "-∇⋅⟨u⃗̃b̃⟩",
-                fontsize = 30,
-                font = :bold,
-                padding = (5, 5, 5, 5),
-                halign = :left)
-Label(ga[1, 2, Top()], "-∇⋅⟨u⃗'b'⟩",
-                fontsize = 30,
-                font = :bold,
-                padding = (5, 5, 5, 5),
-                halign = :left)
-Label(ga[1, 3, Top()], "-∇⋅⟨u⃗̃b̃⟩-∇⋅⟨u⃗'b'⟩",
-                fontsize = 30,
-                font = :bold,
-                padding = (5, 5, 5, 5),
-                halign = :left)
-Label(ga[1, 4, Top()], "-∇⋅⟨u⃗̃b̃⟩-∇⋅⟨u⃗'b'⟩+ ⟨∇⋅κ∇b⟩",
-                fontsize = 30,
-                font = :bold,
-                padding = (5, 5, 5, 5),
-                halign = :left)
-
-savename = path_name * "IntegratesFlux_TripDecomp_" * sn
-save(savename * ".png", f1)
+    axb_tps = Axis(ga[1, 4]) #v
+    axm_tps = Axis(gb[1, 4]) #vh
+    axe_tps = Axis(gc[1, 4], ylabel = "z [m]", xlabel = "y [m]") #vh
 
 
-#################
-#          PHASE BREAKDOWN
-################
+    axe_p.xticks = 500:500:1500
+    axe_t.xticks = 500:500:1500
+    axe_tp.xticks = 500:500:1500
+    axe_tps.xticks = 500:500:1500
 
-FluxDiv_turbWavg_beg  = scale_file1[skeys[1]];
-FluxDiv_phasedepWavg_beg  = scale_file1[skeys[2]];
+    axb_p.yticks = [-250, 0]
+    axm_p.yticks = [-250, 0]
+    axe_p.yticks = [-250, 0]
 
-v_Phdep_begxavg = mean(PhaseDependentVals_beg.v_Phdep, dims = 1)[1,:,:,:];
-w_Phdep_begxavg = mean(PhaseDependentVals_beg.w_Phdep, dims = 1)[1,:,:,:];
-b_Phdep_begxavg = mean(PhaseDependentVals_beg.b_Phdep, dims = 1)[1,:,:,:];
-c_Phdep_begxavg = mean(PhaseDependentVals_beg.c_Phdep, dims = 1)[1,:,:,:];
-∇_phasedepWavg_begxavg = mean(FluxDiv_phasedepWavg_beg.∇_phasedepWavg, dims = 1)[1,:,:];
-∇_turbWavg_begxavg = mean(FluxDiv_turbWavg_beg.∇_turbWavg, dims = 1)[1,:,:];
+    limits!(axb_p, 0, 2000, -500, 0)
+    limits!(axm_p, 0, 2000, -500, 0)
+    limits!(axe_p, 0, 2000, -500, 0)
+    limits!(axb_t, 0, 2000, -500, 0)
+    limits!(axm_t, 0, 2000, -500, 0)
+    limits!(axe_t, 0, 2000, -500, 0)
+    limits!(axb_tp, 0, 2000, -500, 0)
+    limits!(axm_tp, 0, 2000, -500, 0)
+    limits!(axe_tp, 0, 2000, -500, 0)
+    limits!(axb_tps, 0, 2000, -500, 0)
+    limits!(axm_tps, 0, 2000, -500, 0)
+    limits!(axe_tps, 0, 2000, -500, 0)
 
-v_turb_begxavg = mean(TurbVals_beg.v_turb, dims = 1)[1,:,:,:, :];
-w_turb_begxavg = mean(TurbVals_beg.w_turb, dims = 1)[1,:,:,:, :];
-b_turb_begxavg = mean(TurbVals_beg.b_turb, dims = 1)[1,:,:,:, :];
+    hidexdecorations!(axb_p)
+    hidexdecorations!(axm_p)
+    hidedecorations!(axb_t)
+    hidedecorations!(axb_tp)
+    hidedecorations!(axb_tps)
+    hidedecorations!(axm_t)
+    hidedecorations!(axm_tp)
+    hidedecorations!(axm_tps)
+    hideydecorations!(axe_t)
+    hideydecorations!(axe_tp)
+    hideydecorations!(axe_tps)
 
-vb_Phdep = v_Phdep_begxavg .* b_Phdep_begxavg;
-wb_Phdep = w_Phdep_begxavg .* b_Phdep_begxavg;
+    colsize!(f1.layout, 2, Relative(0.05))
 
-vb_turb = mean(v_turb_begxavg .* b_turb_begxavg, dims = 4);
-wb_turb = mean(w_turb_begxavg .* b_turb_begxavg, dims = 4);
+    SGS_boolZY_all_begT_cut = SGS_boolZY_all_begT[2:end, 2:end]
+    SGS_boolZY_all_midT_cut = SGS_boolZY_all_midT[2:end, 2:end]
+    SGS_boolZY_all_endT_cut = SGS_boolZY_all_endT[2:end, 2:end]
 
-zlength = length(zb)
-ylength = 880
-
-Ygrid = reshape(repeat(yb[2:ylength], zlength-1), ylength-1, zlength-1)
-SlopeGridY = curvedslope.(Ygrid)
-boolZY = (SlopeGridY .+ 4) .<= zb[2:end]';  # all the values greater than slope
-
-Δy = yb[1]-yb[2]
-Δz = zb[1]-zb[2]
-
-wb_turb_dz = ((wb_turb[2:end,1:end-1, :] .- wb_turb[2:end,2:end, :])./Δz) .* boolZY;
-vb_turb_dy = ((vb_turb[1:end-1,2:end, :] .- vb_turb[2:end,2:end, :])./Δy) .* boolZY;
-∇_turb_Phavg = wb_turb_dz .+ vb_turb_dy;
-
-wb_Phdep_dz = ((wb_Phdep[2:end,1:end-1, :] .- wb_Phdep[2:end,2:end, :])./Δz) .* boolZY;
-vb_Phdep_dy = ((vb_Phdep[1:end-1,2:end, :] .- vb_Phdep[2:end,2:end, :])./Δy) .* boolZY;
-∇_Phdep = wb_Phdep_dz .+ vb_Phdep_dy;
-
-∇_PhDepFluxTerm =  ∇_phasedepWavg_begxavg .- ∇_Phdep;
-∇_turbFluxTerm =  ∇_turb_Phavg .- ∇_turbWavg_begxavg;
-∇_RHS = ∇_PhDepFluxTerm .- ∇_turbFluxTerm;
-
-tindxs = vcat(vcat(1:2:7, 8),9:2:13)
-yb_cut = yb[1:ylength]
-
-function PhaseAverageFluxPlot(savename, apath, tindxs, v_Phdep_begxavg, w_Phdep_begxavg, ∇_PhDepFluxTerm, 
-    ∇_turbFluxTerm, ∇_RHS, b_Phdep_begxavg, c_Phdep_begxavg)
-
-    f = Figure(resolution = (2200, 1400), fontsize=26)
-    ga = f[1, 1:8] = GridLayout() # v
-    gb = f[2, 1:8] = GridLayout() # w
-    gc = f[3, 1:8] = GridLayout() # grad
-    gbd = f[4, 1:8] = GridLayout() # grad
-    gcd = f[5, 1:8] = GridLayout() # grad
-    ge = f[6, 1:8] = GridLayout() # b
-    gd = f[7, 1:8] = GridLayout() # c
-
-    # v'b'
-    gcb1 = f[1:2, 9] = GridLayout()
-    # w'b'
-    gcb2 = f[3:5, 9] = GridLayout()
-    gcb3 = f[6:7, 9] = GridLayout()
-
-    gplots = [ga, gb, gc, gbd, gcd, ge, gd]
-
-    for g in gplots
-        if g == gd
-            for m = 1:8
-                if m==1
-                    axi = Axis(g[1, m], ylabel = "z [m]", xlabel = "y [m]") 
-                    global ax = axi
-                    axi.xticks = 500:500:1000
-                    axi.yticks = [-250, 0]
-                else
-                    axi = Axis(g[1,m], xlabel = "y [m]")
-                    hideydecorations!(axi)
-                    global ax = hcat(ax, axi)
-                    axi.xticks = 500:500:1000
-                end
-            end
-            global axs = vcat(axs, ax)
-        else
-            for m = 1:8
-                if m==1
-                    axi = Axis(g[1, m], ylabel = "z [m]")
-                    global ax = axi
-                    hidexdecorations!(axi)
-                    axi.yticks = [-250, 0]
-                else
-                    axi = Axis(g[1, m])
-                    global ax = hcat(ax, axi)
-                    hidedecorations!(axi)
-                end
-            end
-            if g == ga
-                global axs = ax
-            else
-                global axs = vcat(axs, ax)
-            end
-        end
-        rowgap!(g, 5)
-        colgap!(g, 5)
-    end
-
-    for j = 1:length(axs)
-        limits!(axs[j], 0, 1500, -500, 0)
-    end
-
-    vmax = 0.3
-    ∇max = round(maximum(abs.(∇_PhDepFluxTerm))*0.1*1e6)*1e-6
-    bmax = 0.0011
-
-    vlims = (-vmax,vmax)
-    nabblims = (-∇max, ∇max)
-    blims = (-bmax, bmax)
-
-    time_pre = "t = "
-    time_post = " Tσ"
-
-    zb_cut = zb[2:end]
-    yb_cut2 = yb_cut[2:end]
-
-    for (m,idx) in enumerate(tindxs)
-        t = phase_times[idx]
-        phaselabel = time_pre * @sprintf("%0.2f", t) * time_post
-
-        v_Phdep_begxavgi = v_Phdep_begxavg[:,:,idx]
-        w_Phdep_begxavgi = w_Phdep_begxavg[:,:,idx]
-        ∇_PhDepFluxTermi = ∇_PhDepFluxTerm[:,:,idx]
-        ∇_turbFluxTermi = ∇_turbFluxTerm[:,:,idx]
-        ∇_RHSi = ∇_RHS[:,:,idx]
-        b_Phdep_begxavgi = b_Phdep_begxavg[:,:,idx]
-        c_Phdep_begxavgi  = log10.(clamp.(c_Phdep_begxavg[:,:,idx], 1e-12,1))
-        
-        global hv = heatmap!(axs[1, m], yb_cut, zb, v_Phdep_begxavgi, colormap = :balance, colorrange = vlims)
-        lines!(axs[1, m], yb, land, color=:black, lw = 4)
-        lines!(axs[1, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-
-        global hw = heatmap!(axs[2, m], yb_cut, zb, w_Phdep_begxavgi, colormap = :balance, colorrange = vlims)
-        lines!(axs[2, m], yb, land, color=:black, lw = 4)
-        lines!(axs[2, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-        
-        global hwb = heatmap!(axs[3, m], yb_cut2, zb_cut, ∇_PhDepFluxTermi, colormap = :balance, colorrange = nabblims)
-        lines!(axs[3, m], yb, land, color=:black, lw = 4)
-        lines!(axs[3, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-
-        global hdyvb = heatmap!(axs[4, m], yb_cut2, zb_cut, ∇_turbFluxTermi, colormap = :balance, colorrange = nabblims)
-        lines!(axs[4, m], yb, land, color=:black, lw = 4)
-        lines!(axs[4, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-
-        global hdzwb = heatmap!(axs[5, m], yb_cut2, zb_cut, ∇_RHSi, colormap = :balance, colorrange = nabblims)
-        lines!(axs[5, m], yb, land, color=:black, lw = 4)
-        lines!(axs[5, m], yb[1:382], land_pdel, color=:black, lw = 4, linestyle = :dash)
-
-        global hb = heatmap!(axs[6, m], yb_cut, zb, b_Phdep_begxavgi, colormap = :balance, colorrange = blims)
-        lines!(axs[6, m], yb, land, color=:black, lw = 4)
-        lines!(axs[6, m], yb[1:382], land_pdel, color=:white, lw = 4, linestyle = :dash)
-
-        global hc = heatmap!(axs[7, m], yb_cut, zb, c_Phdep_begxavgi, colormap = :thermal, colorrange = (-6,0))
-        lines!(axs[end, m], yb, land, color=:white, lw = 4)
-        lines!(axs[end, m], yb[1:382], land_pdel, color=:white, lw = 4, linestyle = :dash)
-        
-        Label(f[1, m, Top()], phaselabel, valign = :bottom,
-        font = :bold, 
-        padding = (0, 0, 5, 0))
-    end
-
-    text!(axs[1, 1], Point.(50, -350), text = "ṽ", align = (:left, :center), color = :black, 
+    hv = heatmap!(axb_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axb_p, Point.(50, -450), text = "1-4 Tσ", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
-    text!(axs[2, 1], Point.(50, -350), text = "w̃", align = (:left, :center), color = :black, 
+        contour!(axb_p, yb[1:ylength], zb, clog_beg, color = :black, linewidth = 3, levels = -5:1:0)
+
+    hvhat = heatmap!(axm_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axm_p, Point.(50, -450), text = "4-7 Tσ", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
-    text!(axs[3, 1], Point.(50, -350), text = "∇⋅([̄ũb̃]̄ - ũb̃)", align = (:left, :center), color = :black, 
+        contour!(axm_p, yb[1:ylength], zb, clog_mid, color = :black, linewidth = 3, levels = -5:1:0)
+
+    hnab = heatmap!(axe_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axe_p, Point.(50, -450), text = "7-11 Tσ", align = (:left, :center), color = :black, 
         font = :bold, fontsize = 26)
-    text!(axs[4, 1], Point.(50, -350), text = "∇⋅(⟨u'b'⟩ - [̄u'b']̄)", align = (:left, :center), color = :black, 
-        font = :bold, fontsize = 26)
-    text!(axs[5, 1], Point.(50, -350), text = "RHS", align = (:left, :center), color = :black, 
-        font = :bold, fontsize = 26)
-    text!(axs[6, 1], Point.(50, -350), text = "b̃", align = (:left, :center), color = :black, 
-        font = :bold, fontsize = 26)
-    text!(axs[7, 1], Point.(50, -350), text = "log₁₀c̃", align = (:left, :center), color = :white, 
-        font = :bold, fontsize = 26)
+        contour!(axe_p, yb[1:ylength], zb, clog_end, color = :black, linewidth = 3, levels = -5:1:0)
+
+    heatmap!(axb_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axm_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axe_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
+
+    heatmap!(axb_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_begT .+ phasedep_boolZY_all_begT), colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axm_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_midT .+ phasedep_boolZY_all_midT), colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axe_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_endT .+ phasedep_boolZY_all_endT), colormap = :balance, colorrange = (-divext, divext))
+
+    heatmap!(axb_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_begT .+ phasedep_boolZY_all_begT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axm_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_midT .+ phasedep_boolZY_all_midT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axe_tps, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_endT .+ phasedep_boolZY_all_endT) .+ SGS_boolZY_all_begT_cut, colormap = :balance, colorrange = (-divext, divext))
 
     # create colorbars the size of the whole data set
-    cb1 = Colorbar(gcb1[1,1], hv, ticks = (-vmax/2:vmax/2:vmax/2, ["-0.15", "0", "0.15"] ),
-    size =25, label = "velocity")
-    cb2 = Colorbar(gcb2[1,1], hwb, ticks = (-∇max/2:∇max/2:∇max/2,  ["-5×10⁻⁵", "0", "5×10⁻⁵"] ), 
-    size =25, label = "Fluxes")
-    cb3 = Colorbar(gcb3[1,1], hb, ticks = (-bmax/2:bmax/2:bmax/2,  ["-5.5×10⁻⁴", "0", "5.5×10⁻⁴"] ), 
-    size =25, label = "Buoyancy")
+    cb1 = Colorbar(gcb[1,1], hnab, ticks = (-8e-5:4e-5:8e-5, ["-8×10⁻⁵", "-4×10⁻⁵", "0",  "-8×10⁻⁵", "-4×10⁻⁵"]), size =35, label = "∂ₜb terms")
 
+    colgap!(ga, 15)
+    colgap!(gb, 15)
+    colgap!(gc, 15)
 
-    colsize!(f.layout, 9, Relative(0.02))
+    Label(ga[1, 1, Top()], "-∇⋅⟨u⃗̃b̃⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[1, 2, Top()], "-∇⋅⟨u⃗'b'⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[1, 3, Top()], "-∇⋅⟨u⃗̃b̃⟩-∇⋅⟨u⃗'b'⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[1, 4, Top()], "-∇⋅⟨u⃗̃b̃⟩-∇⋅⟨u⃗'b'⟩+ ⟨∇⋅κ∇b⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
 
-    Label(f[1, 1:8, Top()],"Phase Triple Decomp, Beginning", valign = :bottom,
-        font = :bold, fontsize = 30,
-        padding = (0, 0, 50, 0))
+    savename = path_name * "IntegratesFlux_TripDecomp_" * sn
+save(savename * ".png", f1)
 
-    save(apath * savename * ".png", f)
+f1 = Figure(resolution = (2000, 1200), fontsize=26)
+    ga = f1[1, 1] = GridLayout() # beg
+    gb = f1[2, 1] = GridLayout() # mid
+    gc = f1[3, 1] = GridLayout() # end
+    gcb = f1[1:3, 2] = GridLayout()
 
-    save(path_name * "TripPhaseDecomp_beg_" * sn * ".png", f )
-end
+    axb_p = Axis(ga[1, 1], ylabel = "z [m]") #v
+    axm_p = Axis(gb[1, 1], ylabel = "z [m]") #vh
+    axe_p = Axis(gc[1, 1], ylabel = "z [m]", xlabel = "y [m]") #vh
+
+    axb_t = Axis(ga[1, 2]) #v
+    axm_t = Axis(gb[1, 2]) #vh
+    axe_t = Axis(gc[1, 2], xlabel = "y [m]") #vh
+
+    axb_tp = Axis(ga[1, 3]) #v
+    axm_tp = Axis(gb[1, 3]) #vh
+    axe_tp = Axis(gc[1, 3], ylabel = "z [m]", xlabel = "y [m]") #vh
+
+    axe_p.xticks = 500:500:1500
+    axe_t.xticks = 500:500:1500
+    axe_tp.xticks = 500:500:1500
+
+    axb_p.yticks = [-250, 0]
+    axm_p.yticks = [-250, 0]
+    axe_p.yticks = [-250, 0]
+
+    limits!(axb_p, 0, 2000, -500, 0)
+    limits!(axm_p, 0, 2000, -500, 0)
+    limits!(axe_p, 0, 2000, -500, 0)
+    limits!(axb_t, 0, 2000, -500, 0)
+    limits!(axm_t, 0, 2000, -500, 0)
+    limits!(axe_t, 0, 2000, -500, 0)
+    limits!(axb_tp, 0, 2000, -500, 0)
+    limits!(axm_tp, 0, 2000, -500, 0)
+    limits!(axe_tp, 0, 2000, -500, 0)
+
+    hidexdecorations!(axb_p)
+    hidexdecorations!(axm_p)
+    hidedecorations!(axb_t)
+    hidedecorations!(axb_tp)
+    hidedecorations!(axm_t)
+    hidedecorations!(axm_tp)
+    hideydecorations!(axe_t)
+    hideydecorations!(axe_tp)
+
+    colsize!(f1.layout, 2, Relative(0.05))
+
+    hv = heatmap!(axb_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axb_p, Point.(50, -450), text = "1-4 Tσ", align = (:left, :center), color = :black, 
+        font = :bold, fontsize = 26)
+
+    hvhat = heatmap!(axm_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axm_p, Point.(50, -450), text = "4-7 Tσ", align = (:left, :center), color = :black, 
+        font = :bold, fontsize = 26)
+
+    hnab = heatmap!(axe_p, yb[2:ylength], zb[2:zlength], -1 .* phasedep_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
+        text!(axe_p, Point.(50, -450), text = "7-11 Tσ", align = (:left, :center), color = :black, 
+        font = :bold, fontsize = 26)
+
+    heatmap!(axb_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_begT, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axm_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_midT, colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axe_t, yb[2:ylength], zb[2:zlength], -1 .* turb_boolZY_all_endT, colormap = :balance, colorrange = (-divext, divext))
+
+    heatmap!(axb_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_begT .+ phasedep_boolZY_all_begT), colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axm_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_midT .+ phasedep_boolZY_all_midT), colormap = :balance, colorrange = (-divext, divext))
+    heatmap!(axe_tp, yb[2:ylength], zb[2:zlength], -1 .* (turb_boolZY_all_endT .+ phasedep_boolZY_all_endT), colormap = :balance, colorrange = (-divext, divext))
+
+    # create colorbars the size of the whole data set
+    cb1 = Colorbar(gcb[1,1], hnab, ticks = (-4e-4:2e-4:4e-4, ["-4×10⁻⁴", "-2×10⁻⁴", "0",  "2×10⁻⁴", "4×10⁻⁴"]), size =35, label = "∂ₜb terms")
+
+    colgap!(ga, 15)
+    colgap!(gb, 15)
+    colgap!(gc, 15)
+
+    Label(ga[1, 1, Top()], "-∇⋅⟨u⃗̃b̃⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[1, 2, Top()], "-∇⋅⟨u⃗'b'⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[1, 3, Top()], "-∇⋅⟨u⃗̃b̃⟩-∇⋅⟨u⃗'b'⟩",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+
+savename = path_name * "IntegratesFlux_TripDecomp_mp_" * sn
+save(savename * ".png", f1)

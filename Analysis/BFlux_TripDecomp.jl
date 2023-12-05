@@ -48,9 +48,12 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 # combining the 2 with heaviside split at ySlopeSame
 @inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
 
-name_prefix = "IntWave_" * sn
+#name_prefix = "IntWave_" * sn
+name_prefix = "IntWave_mp_" * setname
+#name_prefix = "IntWave_mp_nExD_" * setname
+
 filepath = path_name * name_prefix * ".jld2"
-filepath2 = path_name * "cgl_" * sn * ".jld2"
+#filepath2 = path_name * "cgl_" * sn * ".jld2"
 
 @info "getting data from: " * sn
 
@@ -72,10 +75,11 @@ bi = interior(b_timeseries)[:,1:ylength,:,:];
 vi = interior(v_timeseries)[:,1:ylength+1,:,:];
 wi = interior(w_timeseries)[:,1:ylength,:,:];
 SGSi = interior(SGS_timeseries)[:,1:ylength,:,:];
-f3 = jldopen(filepath2);
-CGli = f3["Cgli"];
-spinlength = size(CGli)[4]
-spinuplength = tlength - spinlength;
+
+#f3 = jldopen(filepath2);
+#CGli = f3["Cgli"];
+#spinlength = size(CGli)[4]
+#spinuplength = tlength - spinlength;
 
 include("WaveValues.jl")
 wave_info=get_wave_indices(b_timeseries, pm, tlength)
@@ -95,6 +99,8 @@ w_ccc = 0.5 .* (wi[:,:,1:end-1,:] .+ wi[:,:,2:end,:]);
 end5waves = wave_info.WavePeriods[:,7:end] # t = 7T : 11 T
 beg3waves = wave_info.WavePeriods[:,2:4] # t = 1T : t = 4T
 trans3waves = wave_info.WavePeriods[:,5:7] # t = 4T : t = 7T
+
+fullwaves = wave_info.WavePeriods[:,3:end] # t = 4T : t = 7T
 
 # reorienting into phases
 # x y z Ph W
@@ -123,9 +129,14 @@ function phase_orient(indexing, bi, v_ccc, w_ccc, ci, SGSi, CGli, minlength)
     return PhaseOrientVals
 end
 
-PhaseOrientVals_beg  = phase_orient(beg3waves, bi, v_ccc, w_ccc, ci, SGSi)
 PhaseOrientVals_mid  = phase_orient(trans3waves, bi, v_ccc, w_ccc, ci, SGSi, CGli, spinuplength)
 PhaseOrientVals_end  = phase_orient(end5waves, bi, v_ccc, w_ccc, ci, SGSi, CGli, spinuplength)
+
+PhaseOrientVals_beg  = phase_orient(beg3waves, bi, v_ccc, w_ccc, ci, SGSi)
+PhaseOrientVals_mid  = phase_orient(trans3waves, bi, v_ccc, w_ccc, ci, SGSi)
+PhaseOrientVals_end  = phase_orient(end5waves, bi, v_ccc, w_ccc, ci, SGSi)
+
+PhaseOrientVals_full  = phase_orient(fullwaves, bi, v_ccc, w_ccc, ci, SGSi)
 
 @info "Wave averaging..."
 # x y z
@@ -151,7 +162,10 @@ WaveAveragedVals_end = waveaveraging(PhaseOrientVals_end)
 WaveAveragedVals_beg = waveaveraging(PhaseOrientVals_beg)
 WaveAveragedVals_mid = waveaveraging(PhaseOrientVals_mid)
 
+WaveAveragedVals_full = waveaveraging(PhaseOrientVals_full)
+
 @info "Phase averaging..."
+
 # x y z Ph
 function phaseaveraging(PhaseOrientVals, WaveAveragedVals)
     v_Phavg = mean(PhaseOrientVals.v_Ph, dims = (5))[:,:,:,:,1];
@@ -184,6 +198,8 @@ PhaseAveragedVals_end, PhaseDependentVals_end = phaseaveraging(PhaseOrientVals_e
 PhaseAveragedVals_beg, PhaseDependentVals_beg = phaseaveraging(PhaseOrientVals_beg, WaveAveragedVals_beg)
 PhaseAveragedVals_mid, PhaseDependentVals_mid = phaseaveraging(PhaseOrientVals_mid, WaveAveragedVals_mid)
 
+PhaseAveragedVals_full, PhaseDependentVals_full = phaseaveraging(PhaseOrientVals_full, WaveAveragedVals_full)
+
 @info "turbulent qunatities..."
 # x y z Ph W .-  x y z Ph =  x y z Ph W
 function turbulentquants(PhaseOrientVals, PhaseAveragedVals)
@@ -201,6 +217,7 @@ TurbVals_end = turbulentquants(PhaseOrientVals_end, PhaseAveragedVals_end)
 TurbVals_beg = turbulentquants(PhaseOrientVals_beg, PhaseAveragedVals_beg)
 TurbVals_mid = turbulentquants(PhaseOrientVals_mid, PhaseAveragedVals_mid)
 
+TurbVals_full = turbulentquants(PhaseOrientVals_full, PhaseAveragedVals_full)
 
 function fluxes(TurbVals, PhaseDependentVals)
    
@@ -229,8 +246,11 @@ FluxVals_end = fluxes(TurbVals_end, PhaseDependentVals_end)
 FluxVals_beg = fluxes(TurbVals_beg, PhaseDependentVals_beg)
 FluxVals_mid = fluxes(TurbVals_mid, PhaseDependentVals_mid)
 
+FluxVals_full = fluxes(TurbVals_full, PhaseDependentVals_full)
+
 zlength = length(zb)
 ylength = 880
+xlength = length(xb)
 
 Ygrid = reshape(repeat(yb[2:ylength], xlength*(zlength-1)), ylength-1, zlength-1, xlength)
 SlopeGridY = curvedslope.(Ygrid)
@@ -260,9 +280,11 @@ function Flux_Divergence(Δy, Δz, boolZY, FluxVals)
 
 end
 
-FluxDiv_turbWavg_end, FluxDiv_phasedepWavg_end = Flux_Divergence(Δy, Δz, boolZY, FluxVals_end)
-FluxDiv_turbWavg_beg, FluxDiv_phasedepWavg_beg = Flux_Divergence(Δy, Δz, boolZY, FluxVals_beg)
-FluxDiv_turbWavg_mid, FluxDiv_phasedepWavg_mid = Flux_Divergence(Δy, Δz, boolZY, FluxVals_mid)
+FluxDiv_turbWavg_end, FluxDiv_phasedepWavg_end = Flux_Divergence(Δy, Δz, boolZYX, FluxVals_end)
+FluxDiv_turbWavg_beg, FluxDiv_phasedepWavg_beg = Flux_Divergence(Δy, Δz, boolZYX, FluxVals_beg)
+FluxDiv_turbWavg_mid, FluxDiv_phasedepWavg_mid = Flux_Divergence(Δy, Δz, boolZYX, FluxVals_mid)
+
+FluxDiv_turbWavg_full, FluxDiv_phasedepWavg_full = Flux_Divergence(Δy, Δz, boolZYX, FluxVals_full)
 
 phase_times = b_timeseries.times[wave_info.WavePeriods[:,1]]/pm.Tσ
 
@@ -282,11 +304,14 @@ function savefluxes(savename, apath, FluxDiv_turbWavg, FluxDiv_phasedepWavg, Pha
     yb, zb, phase_times)
 end
 
-savefluxes("BFluxTrip_end_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_end, FluxDiv_phasedepWavg_end, 
+savefluxes("BFluxTrip_end_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_end, FluxDiv_phasedepWavg_end, 
     PhaseDependentVals_end, TurbVals_end, WaveAveragedVals_end, FluxVals_end, yb, zb, phase_times)
 
-savefluxes("BFluxTrip_beg_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_beg, FluxDiv_phasedepWavg_beg,
+savefluxes("BFluxTrip_beg_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_beg, FluxDiv_phasedepWavg_beg,
     PhaseDependentVals_beg, TurbVals_beg, WaveAveragedVals_beg, FluxVals_beg, yb, zb, phase_times)
 
-savefluxes("BFluxTrip_mid_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_mid, FluxDiv_phasedepWavg_mid, 
+savefluxes("BFluxTrip_mid_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_mid, FluxDiv_phasedepWavg_mid, 
     PhaseDependentVals_mid, TurbVals_mid, WaveAveragedVals_mid, FluxVals_mid, yb, zb, phase_times)
+
+savefluxes("BFluxTrip_full_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_full, FluxDiv_phasedepWavg_full, 
+    PhaseDependentVals_dull, TurbVals_full, WaveAveragedVals_full, FluxVals_full, yb, zb, phase_times)
