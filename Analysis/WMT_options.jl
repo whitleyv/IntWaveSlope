@@ -48,6 +48,7 @@ ySlopeSame = zSlopeSameˢ / -pm.Tanα
 name1_prefix = "IntWave_" * setname
 name2_prefix = "IntWave_smdt_" * setname
 name3_prefix = "IntWave_postspin_" * setname
+name_prefix = "IntWave_mp_" * setname
 
 filepath1 = path_name * name1_prefix * ".jld2"
 filepath2 = path_name * name2_prefix * ".jld2"
@@ -71,18 +72,23 @@ xb, yb, zb = nodes(b_timeseries) #CCC
 # dissipation
 e_timeseries = FieldTimeSeries(filepath1,"ϵ");
 # gaussian at slope but with increased time resolution
-Cg_timeseries = FieldTimeSeries(filepath2,"Cg");
-Cs_timeseries = FieldTimeSeries(filepath2,"Cs");
+Cg_timeseries = FieldTimeSeries(filepath1,"Cg");
+Cs_timeseries = FieldTimeSeries(filepath1,"Cs");
+#Cg_timeseries = FieldTimeSeries(filepath2,"Cg");
+#Cs_timeseries = FieldTimeSeries(filepath2,"Cs");
 Cgr_timeseries = FieldTimeSeries(filepath1,"Cgr");
 #Cgl_timeseries = FieldTimeSeries(filepath3, "Cg");
 
-CSi = interior(Cs_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
-CGi = interior(Cg_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
+#CSi = interior(Cs_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
+#CGi = interior(Cg_timeseries)[:, 1:ylength, 1:zlength,1:2:end];
+CSi = interior(Cs_timeseries)[:,1:ylength,1:zlength,:];
+CGi = interior(Cg_timeseries)[:, 1:ylength, 1:zlength,:];
 CGri = interior(Cgr_timeseries)[:, 1:ylength, 1:zlength,:];
 #Cgli = interior(Cgl_timeseries)[:, 1:ylength, 1:zlength,:];
 ei = interior(e_timeseries)[:,1:ylength,1:zlength,:];
 Bi = interior(b_timeseries)[:, 1:ylength, 1:zlength,:];
 # Cgl2i = interior(Cg_timeseries[:, 1:1000, :,:];
+
 @info "Computing Volumes..."
 ini_Nisos = 40 # number of bins
 Δb = -1.47*1e-4 #-500*pm.Ñ^2/ini_Nisos # "width" of bins
@@ -239,6 +245,10 @@ function PhaseAveraging(wave_info, ΔVol, ΔConG, ΔConS, etot, waveframe)
     return ΔVol_Phavg, ΔConG_Phavg, ΔConS_Phavg, etot_Phavg
 end
 
+(ΔVol_Phavg_full_beg, ΔConG_Phavg_beg, ΔConS_Phavg_beg, etot_Phavg_beg) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 2:4)
+(ΔVol_Phavg_full_mid, ΔConG_Phavg_mid, ΔConS_Phavg_mid, etot_Phavg_mid) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 4:7)
+(ΔVol_Phavg_full_end, ΔConG_Phavg_end, ΔConS_Phavg_end, etot_Phavg_end) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 7:10)
+
 (ΔVol_Phavg_full, ΔConG_Phavg_full, ΔConS_Phavg_full, etot_Phavg_full) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 7:10)
 (ΔVol_Phavg_full_b, ΔConG_Phavg_full_b, ΔConS_Phavg_full_b, etot_Phavg_full_b) = PhaseAveraging(wave_info, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 1:3)
 
@@ -325,14 +335,21 @@ phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_1d_b, ΔConG_Phavg_1d_b, ΔC
  "bClasses_slopebeg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
  2e5, 5e3, 2e4, 0.05)
 
-phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full, ΔConG_Phavg_full, ΔConS_Phavg_full, etot_Phavg_full,
- "bClasses_end_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_end, ΔConG_Phavg_end, ΔConS_Phavg_end, etot_Phavg_end,
+ "bClasses_end_mp_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
  7e5, 5e4, 5e4, 0.05)
-phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_b, ΔConG_Phavg_full_b, ΔConS_Phavg_full_b, etot_Phavg_full_b,
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_mid, ΔConG_Phavg_mid, ΔConS_Phavg_mid, etot_Phavg_mid,
+ "bClasses_mid_mp_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 7e5, 5e4, 5e4, 0.05)
+phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_beg, ΔConG_Phavg_beg, ΔConS_Phavg_beg, etot_Phavg_beg,
+ "bClasses_beg_mp_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+ 4e5, 2e4, 2e4, 0.05)
+
+ phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_full_b, ΔConG_Phavg_full_b, ΔConS_Phavg_full_b, etot_Phavg_full_b,
  "bClasses_beg_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
  4e5, 2e4, 2e4, 0.05)
 
-phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_025d, ΔConG_Phavg_025d, ΔConS_Phavg_025d, etot_Phavg_025d,
+ phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_025d, ΔConG_Phavg_025d, ΔConS_Phavg_025d, etot_Phavg_025d,
  "bClasses_025d_end_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
  5e4, 5e3, 5e4, 0.05)
 phaseavg_volume_plot(phase_times, isos, ΔVol_Phavg_b, ΔConG_Phavg_025d_b, ΔConS_Phavg_025d_b, etot_Phavg_025d_b,
@@ -375,6 +392,8 @@ end
 (ΔVol_rWavg_025d, ΔConG_rWavg_025d, ΔConS_rWavg_025d, etot_rWavg_025d) = WaveAveraging(wave_info, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d)
 
 # wave period times for rolling average
+WL = wave_info.Wl
+nTσ = wave_info.nTσ
 rWtimes = b_timeseries.times[wave_info.WavePeriods[WL+1:WL*nTσ - WL]]/pm.Tσ
 
 function volume_plot(times, isos, ΔVol, ΔConG, ΔConS, etot, savename, apath,
@@ -440,7 +459,7 @@ function volume_plot(times, isos, ΔVol, ΔConG, ΔConS, etot, savename, apath,
 end
 
 volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_full, ΔConG_full, ΔConS_full, etot_full, 
-"bClasses_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
+"bClasses_mp_" * @sprintf("n%d_", ini_Nisos) * setname, apath,
 1.5e6, 1.5e4, 7.5e4, 0.08)
 
 volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_025d, ΔConG_025d, ΔConS_025d, etot_025d, 
@@ -524,6 +543,36 @@ waveavg_volume_plot(b_timeseries.times./pm.Tσ, isos, ΔVol_rWavg_025d, ΔConG_r
 
 ini_Nisos = 250
 Δb = -500*pm.Ñ^2/ini_Nisos
+
+function dMdb_binning(ini_Nisos, nrange, tlength, Bi, CGi, CSi)
+   
+    @info "Calculating isopycnal volume..."
+    M_btG = zeros(ini_Nisos, tlength)
+    M_btS = zeros(ini_Nisos, tlength)
+
+    for i = 1:tlength
+        @info "Time $i of $tlength..."
+        # at each time step get the data at (x,ycut,z)
+        bi = Bi[:,:, :, i];
+        Cgi = CGi[:,:,:, i];
+        Csi = CSi[:,:,:, i];
+
+        # for each buoyancy class:
+        for n = nrange
+            # (1) CCC locations in the density class
+            # starting with b < 0 should be almost the whole domain
+            boolB = (bi.< Δb*(n-1))
+            # dye within the isopycnal layer
+            cG_inb = Cgi[boolB]
+            cS_inb = Csi[boolB]
+            # volume integrated dye concentration:
+            M_btG[n,i] = sum(cG_inb)*16
+            M_btS[n,i] = sum(cS_inb)*16
+        end
+    end
+
+    return M_btG, M_btS
+end
 
 spinlength = size(CGli)[4]
 
@@ -649,6 +698,8 @@ function dMdb_binning(ini_Nisos, nrange, tlength, spinlength, Bi, CGi, CGri, CGl
 end
 
 (M_btG, M_btGr, M_btGl) = dMdb_binning(ini_Nisos, 1:ini_Nisos, tlength, spinlength, Bi, CGi, CGri, CGli)
+
+(M_btG, M_btS) = dMdb_binning(ini_Nisos, 1:ini_Nisos, tlength, Bi, CGi, CSi)
 
 Δt = b_timeseries.times[2] - b_timeseries.times[1]
 
@@ -801,8 +852,8 @@ end
 ∂M∂bS_bounds = (0, 1e9)
 ∂_∂M∂b_∂tG_bounds = (-7e4, 7e4)
 ∂_∂M∂b_∂tS_bounds = (-5e5, 5e5)
-Δ∂M∂bG = (-2e8, 2e8)
-Δ∂M∂bS = (-4e8, 4e8)
+Δ∂M∂bG_bounds = (-2e8, 2e8)
+Δ∂M∂bS_bounds = (-4e8, 4e8)
 
 # create colorbars the size of the whole data set
 ∂M∂bG_ticks = (0:5e7:1e8, ["0", "5×10⁷","1×10⁸"] )
@@ -815,7 +866,7 @@ end
 dMdb_SlopeGauss_plot(wtims./pm.Tσ, isosdb, ∂M∂bG_rW, ∂_∂M∂b_∂tG_rW, Δ∂M∂bG, ∂M∂bS_rW, ∂_∂M∂b_∂tS_rW, Δ∂M∂bS_rW,
     ∂M∂bG_bounds, ∂_∂M∂b_∂tG_bounds, Δ∂M∂bG_bounds, ∂M∂bS_bounds, ∂_∂M∂b_∂tS_bounds, Δ∂M∂bS_bounds,
     ∂M∂bG_ticks, ∂_∂M∂b_∂tG_ticks, Δ∂M∂bG_ticks, ∂M∂bS_ticks, ∂_∂M∂b_∂tS_ticks, Δ∂M∂bS_ticks,
-    "MbClasses_rWavg_" * @sprintf("n%d_", ini_Nisos) * setname, apath)
+    "MbClasses_rWavg_mp_" * @sprintf("n%d_", ini_Nisos) * setname, apath)
 
 #########################
 #                   CLOSE UP BOUYANCY dM/dB Calculation
