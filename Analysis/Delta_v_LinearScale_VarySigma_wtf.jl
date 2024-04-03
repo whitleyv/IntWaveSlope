@@ -4,7 +4,7 @@ using Oceananigans
 using CurveFit
 using ArgParse
 using JLD2
-using CairoMakie
+
 ###########-------- SIMULATION PARAMETERS ----------------#############
 
 # curved topo parameters
@@ -14,14 +14,13 @@ const ySlopeSameˢ = 1332.22                           # point where planar and 
 
 #apath = "/glade/scratch/whitleyv/NewAdvection/Parameters/"
 #apath = "Plots"
-path_name =  "/glade/derecho/scratch/whitleyv/FROM_CHEYENNE/NewAdvection/Parameters/VaryU03C/wPE/"
 
-#path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
+path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
 apath = path_name * "Analysis/"
 
 sn = "U250Nfd250Lz100g100"
 
-include("parameters.jl")
+include("../parameters.jl")
 
 pm = getproperty(SimParams(), Symbol(sn))
 
@@ -48,16 +47,6 @@ pm = merge(pm, (;Ly=Ly,ny=ny, slope_end=slope_end, Sp_extra=Sp_extra))
 
 # if slope is in different spot than usual, need to move the curved part too!
 const zSlopeSameˢ = -pm.Tanαˢ * ySlopeSameˢ
-ySlopeSame = zSlopeSameˢ / -pm.Tanα
-ΔySlopeSame = ySlopeSameˢ - ySlopeSame
-
-@inline heaviside(X) = ifelse(X <0, 0.0, 1.0)
-# exponential gaussian for curved corner
-@inline expcurve(y, ystar, smo) = -pm.Lzˢ + pm.Lzˢ * exp(-(y-ystar)^2/(2*smo^2))
-# planar slope line
-@inline linslope(y) = -pm.Tanα*y
-# combining the 2 with heaviside split at ySlopeSame
-@inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
 
 # how many times were saved?
 zlength = pm.nz
@@ -71,23 +60,23 @@ firstH = 50 #end at z = -450
 # indices to start and stop 
 z_st = round(Int, lastH/2) # start at z = -50
 z_en = round(Int, firstH/2) # end at z = -450 (smaller indices = deeper)
-y_st = round(Int, ((pm.Lz-lastH)/pm.Tanα)/4) # find corresponding y value on slope when z = 250
 y_en = round(Int, 2500/4) # just choosing this y value to include most of dye excursions
-
 zlength_sm = length(z_en:z_st)
-ylength_sm = length(y_st:y_en)
+
+@inline heaviside(X) = ifelse(X <0, 0.0, 1.0)
+# exponential gaussian for curved corner
+@inline expcurve(y, ystar, smo) = -pm.Lzˢ + pm.Lzˢ * exp(-(y-ystar)^2/(2*smo^2))
 
 #### ------------Each Simulation and Array Info----------###
 @info "Setting up Save Arrays "
 
-#filesetnames =  "../SetnamesList.jld2"
-filesetnames = "SetList_mp.jld2"
+filesetnames =  "../SetnamesList.jld2"
 
 scale_file = jldopen(filesetnames, "r+")
 
 sns = scale_file["setnames"]
 
-setnames = sns[1:22]
+setnames = sns[1:25]
 Lvals = length(setnames)
 
 ################################ INTRUSIONS
@@ -108,13 +97,18 @@ thorpe_hmax_tavg = zeros(Lvals)
 Nheight_havg_tavg = zeros(Lvals)
 Nheight_hrms_trms = zeros(Lvals)
 
+δ = zeros(Lvals)
+Ns = zeros(Lvals)
+σs = zeros(Lvals)
+γs = zeros(Lvals)
+
 cond_gt0(y) = y > 0 
 cond_lt0(y) = y < 0
 cond_lte0(y) = y <= 0
 cond_gt1(y) = y > 1 # find next overturn
 cond_gt4(y) = y > 4 # cutoff for overturns
 isemp(A) = length(A) < 1
-isNemp(A) = length(A) >= 1
+isNemp(A) = length(A) > 1
 thresh(z) = z>10^(-6)
 
 start_time = time_ns()
@@ -126,12 +120,9 @@ rolWidz = 3
 # number of individual results to log at each (y,t) location
 numRes = 25
 
-sfiles = scale_file["setfilenames"]
-
 for (m, setname) in enumerate(setnames)
     
-    #name_prefix = "vIntWave_" * setname
-    name_prefix = sfiles[m] * setname
+    name_prefix = "vIntWave_" * setname
     filepath = path_name * name_prefix * ".jld2"
     @info "getting data from: " * setname
 
@@ -153,13 +144,31 @@ for (m, setname) in enumerate(setnames)
     pm2 = merge(pm2, (; Tanθ = sqrt((pm2.σ^2 - pm2.f^2)/(pm2.Ñ^2-pm2.σ^2)),
                 Tanα = pm2.γ * sqrt((pm2.σ^2 - pm2.f^2)/(pm2.Ñ^2-pm2.σ^2)),
                 nz = round(Int,pm2.Lz/2),
-                m = -π/pm2.Lz,
+                m = π/pm2.Lz,
                 l = sqrt(((π/pm2.Lz)^2 * (pm2.f^2 - pm2.σ^2)) / (pm2.σ^2 - pm2.Ñ^2)),
                 Tf = 2*π/pm2.f, 
                 Tσ = 2*π/pm2.σ))
 
+    # other params for setting up the grid
+    slope_end = pm2.Lzˢ/pm2.Tanα
+
+    # if slope is in different spot than usual, need to move the curved part too!
+    ySlopeSame = zSlopeSameˢ / -pm2.Tanα
+    ΔySlopeSame = ySlopeSameˢ - ySlopeSame
+
+    # planar slope line
+    @inline linslope(y) = -pm2.Tanα*y
+    # combining the 2 with heaviside split at ySlopeSame
+    @inline curvedslope(y) = linslope(y) + (-linslope(y) + expcurve(y, gausT_center-ΔySlopeSame, gausT_width)) * heaviside(y-ySlopeSame)
+
+    y_st = round(Int, ((pm2.Lz-lastH)/pm2.Tanα)/4) # find corresponding y value on slope when z = 250
+    y_st = (y_st > rolWidy) ?  y_st : (rolWidy+1)
+
+    ylength_sm = length(y_st:y_en)
+
+
     @info "Calculating Wave Indices..."
-    include("WaveValues.jl")
+    include("../WaveValues.jl")
     wave_info=get_wave_indices(N_timeseries, pm2, tlength)
 
     # gather the last 4 waves in a usual sim
@@ -263,7 +272,7 @@ for (m, setname) in enumerate(setnames)
     for (ni, i) in enumerate(wave_info.WavePeriods[W3length:W11length])
 
         Displace_Lt = zeros(ylength-1, zlength)
-        @info "time $i/$tlength..."
+        #@info "time $i/$tlength..."
         b = b_timeseries[i]
         bi = interior(b)[:, 1:ylength, :]
     
@@ -271,6 +280,7 @@ for (m, setname) in enumerate(setnames)
         b_xavg = mean(bi, dims = 1)[1,:,:]
     
         for (j,y) in enumerate(yb[2:ylength])
+
             top_cond(z) = z>=curvedslope(y)
             # first index above the slope, fy : end in the fluid
             fy = findfirst(top_cond, zb)
@@ -295,7 +305,7 @@ for (m, setname) in enumerate(setnames)
             end
 
             # find all the values above threshold, defining overturns
-            O_idxs = findall(cond_gt0, Sum_Disp)
+            O_idxs = findall(cond_gt4, Sum_Disp)
             
             if isNemp(O_idxs)
                 # find all the jumps in values 
@@ -305,11 +315,11 @@ for (m, setname) in enumerate(setnames)
                 e_over_idxs =  isNemp(sO_idxs) ? [O_idxs[sO_idxs]; O_idxs[end]] :  O_idxs[end]
     
                 # if nothing then just set it to 1 so that it takes an index at all
-                #Overturns_rmsL = ones(length(b_over_idxs))
+                Overturns_rmsL = ones(length(b_over_idxs))
                 for o in 1:length(b_over_idxs)
                     bo = b_over_idxs[o]
                     eo = e_over_idxs[o]
-                    overturn = Displace_Lt[j,bo-1:eo]
+                    overturn = Displace_Lt[j,bo:eo]
                     overturnL = length(overturn)
                     #Overturns_rmsL[o] = sqrt(sum((overturn).^2)/overturnL)
                     All_Toverturns[ni, j, o] = sqrt(sum((overturn).^2)/overturnL)
@@ -371,7 +381,7 @@ for (m, setname) in enumerate(setnames)
                     # cutting off any negative values that are within 4 indices of bottom (6m)
                     cutbot = sum( negs .< fy + 3)
                     negs = negs[cutbot+1:end]
-                    # taking the "derivativ" of N^2' in this profile
+                    banom = bi_pert_ryrzrW[yi,:,i] 
                     Nanom_dif = ñ2i_pert_ryrzrW[yi,2:end,i] .- ñ2i_pert_ryrzrW[yi,1:end-1,i] 
                     dnegs = negs[2:end] .- negs[1:end-1]
                     # find all the places there was a jump in values
@@ -433,9 +443,9 @@ for (m, setname) in enumerate(setnames)
     Cheight_hrms_trms[m] = isemp(non0_idx) ? 0 : sqrt.(sum(Cht_hrms[non0_idx].^2)/length(non0_idx))
 
     @info "Calculating Thorpe Stats..."
-    Lt_havg = zeros(LtcutWtlength)
-    Lt_hmax = zeros(LtcutWtlength)
-    Lt_med = zeros(LtcutWtlength)
+    Lt_havg = zeros(tlength)
+    Lt_hmax = zeros(tlength)
+
     for i = 1:LtcutWtlength
         n0_ct_tim = count(cond_lte0, All_Toverturns[i,:,:], dims=1)
         Lt_std = sort(All_Toverturns[i,:,:],dims=1)
@@ -446,16 +456,6 @@ for (m, setname) in enumerate(setnames)
         end
         Lt_havg[i] = isemp(Lt_time_i) ? 0 : mean(Lt_time_i)
         Lt_hmax[i] = isemp(Lt_time_i) ? 0 : maximum(Lt_time_i)
-    end
-
-    for i = 1:LtcutWtlength
-        # time step
-        overturns_t = All_Toverturns[i,:,:]
-        # all overturns above 4m threshold
-        overturns_overthreshold = overturns_t[cond_gt4.(overturns_t)]
-        Lt_havg[i] = mean(overturns_overthreshold)
-        Lt_hmax[i] = maximum(overturns_overthreshold)
-        Lt_med[i] = median(overturns_overthreshold)
     end
 
     non0_idx = findall(cond_gt0, Lt_havg[wave_info.T_Tσs[3]:end]) .+ wave_info.T_Tσs[3] .- 1
@@ -492,6 +492,10 @@ for (m, setname) in enumerate(setnames)
     Nheight_hrms_trms[m] = isemp(non0_idx) ? 0 : sqrt.(sum(Nht_hrms[non0_idx].^2)/length(non0_idx))
 
     @info "Statistics Finished for dataset $m/$Lvals"
+    δ[m] = pm2.U₀/pm2.Ñ
+    Ns[m] = pm2.Ñ
+    σs[m] = pm2.σ
+    γs[m] = pm2.γ
 end
 
 # plot statistics compared to delta values
