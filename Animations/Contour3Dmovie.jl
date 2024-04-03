@@ -6,8 +6,8 @@ using JLD2
 #path_name = "/glade/scratch/whitleyv/NewAdvection/Parameters/VaryU03C/wPE/"
 
 #setname = "U250N100Lz100g100"
-setname = "U350N100Lz130g100Lx300"
-pmsetname = "U350N100Lz100g100"
+setname = "U250N100Lz100g100" #Lx300"
+pmsetname = "U250N100Lz100g100"
 include("../parameters.jl")
 
 pm = getproperty(SimParams(), Symbol(pmsetname))
@@ -36,10 +36,10 @@ const ySlopeSame = 1336.6                           # point where planar and cur
 
 @info "getting data from: " * setname
 
-path_name = "../Data/"
-filepath1 = path_name * "DyesOnly_" * setname * ".jld2"
-filepath2 = path_name * "DyegOnly_" * setname * ".jld2"
-
+path_name = "Data/"
+#filepath1 = path_name * "DyesOnly_" * setname * ".jld2" 
+#filepath2 = path_name * "DyegOnly_" * setname * ".jld2"
+filepath1 = path_name * "Cs_mp_noS_" * setname * ".jld2"
 #name_prefix = "IntWave_" * setname
 #filepath = path_name * name_prefix * ".jld2"
 
@@ -50,31 +50,37 @@ filepath2 = path_name * "DyegOnly_" * setname * ".jld2"
 #c2i = interior(c2_timeseries)[:, 1:900, 1:250, 1:2:end]
 
 f1 = jldopen(filepath1)
-f2 = jldopen(filepath2)
+#f2 = jldopen(filepath2)
 
-c_timeseries1 = f1["c2i"];
-c_timeseries2 = f2["c1i"];
+ycut = 875
 
+c_timeseries1 = f1["ci"][:,1:ycut,:,:];
 (cLx, cLy, cLz, tlength) = size(c_timeseries1)
 
-xc = 2:4:(cLx*4)
-yc = 2:4:(cLy*4)
-zc = -499:2:-1
+xc = f1["xc"];
+yc = f1["yc"][1:ycut];
+zc = f1["zc"];
+ctimes = f1["times"];
+#c_timeseries2 = f2["c1i"];
 
-LxCex = 460
-# LxCex = 152
+#xc = 2:4:(cLx*4)
+#yc = 2:4:(cLy*4)
+#zc = -499:2:-1
 
-land = [curvedslope(y) for x in -5:4:LxCex, y in 0:4:3500];
+#LxCex = 460
+LxCex = 152
+
+land = [curvedslope(y) for x in -5:4:LxCex, y in yc];
 
 #xc, yc, zc = nodes(c_timeseries) #CCC
 
 #land = [curvedslope(y) for x in xc, y in yc];
 
 n = Observable(1)
-ctimes = 0:600:tlength*600
+#ctimes = 0:600:tlength*600
 
 #title = @lift "Internal Wave Breaking, t = " * string(round(c_timeseries.times[$n], digits=2)) * ", Tσ = "*string(round(c_timeseries.times[$n]/pm.Tσ, digits=2))
-title = @lift "Passive Tracer During Internal Wave Breaking, δ = 100 m, t = " * string(round(ctimes[$n]/3600, digits=1)) * " hrs, Tσ = "*string(round(ctimes[$n]/pm.Tσ, digits=2))
+title = @lift "Tracer Concentration, t = " * string(round(ctimes[$n]/3600, digits=1)) * " hrs, Tσ = "*string(round(ctimes[$n]/pm.Tσ, digits=2))
 
 #f = Figure(resolution = (1500, 550),fontsize=26) 
 f = Figure(resolution = (1600, 600),fontsize=26) 
@@ -111,9 +117,10 @@ cb = Colorbar(ga[1, 2], limits = (-4,0), colormap = (:thermal), ticks = (-4:1:-1
 #cb.alignmode = Mixed(right = 0)
 colgap!(ga, -50)
 
-savename = "Burgers_slope3dwaveseries_" * setname
+savename = "paper_3D_tracer_" * setname
+#savename = "NOPP_slope3dwaveseries_" * setname
 #apath  = path_name * "Analysis/"
-apath  =  "Analysis/Plots/"
+apath  =  "Analysis/PaperFigures/FinalPaperFigures/FinalFiguresUsed/SupplementaryInfo/"
 
 frames = 1:tlength
 record(f, apath * savename * ".mp4", frames, framerate=8) do j
@@ -122,6 +129,7 @@ record(f, apath * savename * ".mp4", frames, framerate=8) do j
     n[] = j
 end
 
+#=
 fb = Figure(resolution = (1500, 550),fontsize=26) 
 ga = fb[1, 1] = GridLayout()
 
@@ -161,3 +169,4 @@ record(fb, apath * savename * ".mp4", frames, framerate=8) do j
     print(msg * " \r")
     n[] = j
 end
+=#
