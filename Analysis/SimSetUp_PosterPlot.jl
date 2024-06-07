@@ -94,21 +94,21 @@ right_maskshape = [right_mask(y) for y in yy, z in zz];
 @inline corner_mask(y, z) = top_mask(z) * left_mask(y)
 corner_maskshape = [corner_mask(y,z) for y in yy, z in zz];
 
-f = Figure(resolution = (1700, 600),fontsize=26) #left, right, bottom, top
+f = Figure(resolution = (3400, 1200),fontsize=52, figure_padding = (50, 5, 30, 0)) #left, right, bottom, top
 ga = f[1, 1] = GridLayout()
 
 ax1 = Axis3(ga[1, 1] , azimuth = π/8, # rotation of plot
             elevation = 0.15, 
-            aspect =(1,3,1), xtickwidth = 0,
+            aspect =(1,3,1), 
             xticks = ([0,152], ["152", "0"]), xticklabelpad = -25, 
             zticks = ([-500, -250, 0]),
-            xlabeloffset = 10, ylabeloffset = 20, zlabeloffset = 100,
+            xlabeloffset = 10, ylabeloffset = 20, zlabeloffset = 200,
             xlabel="x [m]", ylabel = "y [m]", zlabel = "z [m]",)
 #Box(ga[1, 1], color = (:red, 0.2), strokewidth = 0)
 limits!((0,152), (0,5500), (-500,0))
 
 cb = Colorbar(ga[1, 2], limits = (-4,0), colormap = (:thermal), ticks = (-4:1:-1, ["10⁻⁴", "10⁻³", "10⁻²", "10⁻¹"] ),
-    label = "Tracer Initialization",lowclip = :white, size = 25)
+    label = "Tracer Initialization",lowclip = :white, size = 50)
 
 # right = 0 : right side of cb pulls protrusion content inward with an additional padding of 0.
 cb.alignmode = Mixed(right = 0)
@@ -136,19 +136,19 @@ for x in xx[1:13:end]
 end
 # annotation
 text!(ax1,Point.(152, 1200, -470), text = "α", align = (:right, :center), color = :white, 
-    fontsize = 26, font = :bold)
-text!(ax1,Point.(76, 4200, 70), text = "Forced Wave", align = (:left, :center), color = :black, 
-    fontsize = 26, rotation = -π/60)
+    fontsize = 52, font = :bold)
+text!(ax1,Point.(76, 4400, 70), text = "Forced Wave", align = (:left, :center), color = :black, 
+    fontsize = 52, rotation = -π/60)
 text!(ax1,Point.(76, 5400, 70), text = "Sponge", align = (:left, :center), color = :black, 
-    fontsize = 26, rotation = -π/60)
-text!(ax1, Point.(76, 750, -5), text = "Sponge", align = (:left, :center), color = :black, 
-    fontsize = 26, rotation = -π/60)
+    fontsize = 52, rotation = -π/60)
+#text!(ax1, Point.(76, 750, -5), text = "Sponge", align = (:left, :center), color = :black, 
+#    fontsize = 26, rotation = -π/60)
 
 # sponge regions
 contourf!(ax1, yy, zz, right_maskshape; levels = (0.05:0.05:1), colormap = cgrad(:grayC, alpha=0.7), #:Greys_8, 
     transformation=(:yz, -5), linewidth = 5, alpha = 0.6)
-contourf!(ax1, yy, zz, corner_maskshape; levels = (0.05:0.05:1), colormap = cgrad(:grayC, alpha=0.7), #:Greys_8, 
-    transformation=(:yz, -5), linewidth = 5)
+#contourf!(ax1, yy, zz, corner_maskshape; levels = (0.05:0.05:1), colormap = cgrad(:grayC, alpha=0.7), #:Greys_8, 
+#    transformation=(:yz, -5), linewidth = 5)
 contourf!(ax1, yy, zz, gauss_wave; levels = (0.05:0.05:1), colormap = cgrad(:grayC, alpha=0.7), #:Greys_8, 
     transformation=(:yz, 0), linewidth = 3)
 
@@ -161,5 +161,5 @@ contourf!(ax1, 0:4:2000, zz, c2_flat2; levels = (-4:0.05:0), colormap = :thermal
 
 resize_to_layout!(f)
 
-save("Analysis/Plots/Poster_SimSetUp.png", f)
+save("Analysis/Plots/Poster_NoSponge_SimSetUp.png", f, px_per_unit = 2)
 
