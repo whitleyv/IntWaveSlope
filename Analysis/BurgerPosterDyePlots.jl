@@ -43,6 +43,9 @@ filepath = path_name * name_prefix * ".jld2"
 c_timeseries = FieldTimeSeries(filepath, "Cs");
 xc, yc, zc = nodes(c_timeseries) #CCC
 
+N_timeseries = FieldTimeSeries(filepath, "N2");
+xn, yn, zn = nodes(N_timeseries) #CCC
+
 land = curvedslope.(yc) 
 
 lastH = 450 #start at z = -50 (used to be -250)
@@ -140,6 +143,101 @@ for p = 2:length(roots)
     end
 end
 
+@info "startification "
+
+ñ2i = mean(interior(N_timeseries), dims=1)[1,:,:,:];
+    
+# perturbations
+ñ2i_init = ñ2i[:,:,1]
+ñ2i_pert = ñ2i .- ñ2i_init
+# initial N^2 should just be pm.N^2
+
+# rolling y avg
+ñ2i_pert_ry = zeros(ylength_sm, zlength, tlength)
+for (yi, y_md) in enumerate(y_st:y_en)
+    ñ2i_pert_ry[yi,:, :] = mean(ñ2i_pert[y_md-rolWidy:rolWidy+y_md, 1:zlength, :], dims = 1)
+end
+
+# rolling z avg
+ñ2i_pert_ryrz = zeros(ylength_sm, zlength_sm, tlength)
+# rolling vertical average over 7 grid points, to smooth things out
+for (ki, zk) in enumerate(z_en:z_st)
+    ñ2i_pert_ryrz[:,ki,:] = mean(ñ2i_pert_ry[:,zk-rolWidz:zk+rolWidz,:], dims =2)[:,1,:]
+end
+
+include("../WaveValues.jl")
+wave_info=get_wave_indices(N_timeseries, pm, 161)
+
+# gather the last 4 waves in a usual sim
+# this is 7Tσ - 10.9Tσ or waves 7-10
+# in the array this is columns 8:11
+
+# total number of data points
+Wtlength = wave_info.Wl * wave_info.nTσ
+# 4 waves long
+cutWtlength = 4*wave_info.Wl
+# starts at 7Tσ
+W7length = wave_info.Wl * 7  + 1 
+# thorpe starts at 3Tσ
+W3length = wave_info.Wl * 3  + 1 
+# ends at 10.9Tσ
+W11length = wave_info.Wl * 11
+LtcutWtlength = 8*wave_info.Wl
+#for rolling wave avg, can't use the last half of wave if no more waves after that...
+hWl = floor(Int64, wave_info.Wl/2)
+
+if Wtlength > (W11length + hWl)
+    # if room to go to end of "last" wave, then go!
+    rWtlength = cutWtlength
+else 
+    rWtlength = cutWtlength - hWl
+end
+
+# rolling wave avg
+ñ2i_pert_ryrzrW = zeros(ylength_sm, zlength_sm, rWtlength)
+for (i,l) in enumerate(W7length:W7length+rWtlength-1)
+    ñ2i_pert_ryrzrW[:,:,i] = mean(ñ2i_pert_ryrz[:,:,wave_info.WavePeriods[l-hWl:l+hWl]], dims=3)[:,:,1]
+end
+
+@info "Calculating Unstable Heights..."
+
+All_Nheights = zeros(5)
+negs = []
+negs = findall(cond_lt0, ñ2i_pert_ryrzrW[yi,:,end])
+
+# assuming there was at least one value that was negative
+top_cond(z) = z>=curvedslope(yn[y_md])
+# first index above the slope, fy : end in the fluid
+fy = findfirst(top_cond, zn[z_en:z_st])
+# cutting off any negative values that are within 4 indices of bottom (6m)
+cutbot = sum( negs .< fy + 3)
+negs = negs[cutbot+1:end]
+Nanom_dif = ñ2i_pert_ryrzrW[yi,2:end,end] .- ñ2i_pert_ryrzrW[yi,1:end-1,end] 
+dnegs = negs[2:end] .- negs[1:end-1]
+# find all the places there was a jump in values
+skip_negs = findall(cond_gt1, dnegs)
+# the starting points will be the 1st neg + all the values after the jump
+st_negs = [negs[1] ; negs[skip_negs.+1]]
+en_negs = [negs[skip_negs] ; negs[end]]
+
+new_negs_bot = []
+new_negs_top = []
+
+for p = 1:length(st_negs)
+    if (en_negs[p] < zlength_sm) & (st_negs[p] > 1)
+
+        anom_en = findfirst(cond_lte0, Nanom_dif[en_negs[p]+1:end])
+        anom_st = findlast(cond_gt0,Nanom_dif[1:st_negs[p]-1])
+        if (typeof(anom_st) == Int64) & (typeof(anom_en) == Int64) 
+            All_Nheights[p] = zn[anom_en+en_negs[p]] .- zn[anom_st]
+            new_negs_bot = [new_negs_bot; anom_st]
+            new_negs_top = [new_negs_top; anom_en+en_negs[p]]
+        end
+
+    end
+     
+end 
+
 @info "Plotting Appendix Plot..."
 
 # cmifull is length(y_st:100) and full zlength but with y rolling average
@@ -149,7 +247,7 @@ end
 cifull_log = log10.(clamp.(cifull, 1e-15, 1e-0))
 cmi_logy = log10.(clamp.(cmi, 1e-15, 1e-0))
 
-f = Figure(resolution = (1000, 700), fontsize=26)
+f = Figure(resolution = (1500, 700), fontsize=26)
 ga = f[1, 1] = GridLayout()
 gb = f[1, 2] = GridLayout()
 
@@ -163,10 +261,17 @@ limits!(axtop, 138, 3400, -450, -50)
 
 axrt = Axis(gb[1, 1], xlabel = "Concentration", ylabel = "z [m]", 
 title ="Tracer at y = 2374 m")
+axrtN = Axis(gb[1, 2], xlabel = "N² Anomaly", 
+title ="N²' at y = 2374 m")
+
 # we want a log y axis with ticks at -8 through 0
 axrt.xticks = (-10:4:-2, ["10⁻¹⁰", "10⁻⁶","10⁻²"])
 axrt.yticks = -400:100:-100
-limits!(axrt, -15, 0, -450, -100)
+limits!(axrt, -15, 0, -450, -50)
+
+hideydecorations!(axrtN, grid = false)
+axrtN.xticks = (-1e-5:1e-5:1e-5, ["10⁻⁵", "0","10⁻⁵"])
+limits!(axrtN, -2e-5, 2e-5, -450, -50)
 
 hmc = heatmap!(axtop, yc, zc, cifull_log, colormap= :thermal, colorrange = (-6, 0),)
 lines!(axtop, yc, land, color=:black, lw = 4)
@@ -190,16 +295,31 @@ for (i, wd) in enumerate(rt_widths)
                 fontsize = 26)
 end
 
+del = hspan!(axrtN, zn[new_negs_bot.+ z_en], zn[new_negs_top.+ z_en], color = (:firebrick2, 0.2),)
+pf = lines!(axrtN, ñ2i_pert_ryrzrW[yi,:,end], zn[z_en:z_st], color = :gray, linewidth = 7,)
+minp = scatter!(axrtN, ñ2i_pert_ryrzrW[yi,new_negs_bot,end], zn[new_negs_bot .+ z_en], 
+    marker=:rect, markersize = 20, color = :dodgerblue2,
+    strokecolor = :black, strokewidth = 1)
+scatter!(axrtN, ñ2i_pert_ryrzrW[yi,new_negs_top, end], zn[new_negs_top .+ z_en], 
+    marker=:rect, markersize = 20, color = :dodgerblue2,
+    strokecolor = :black, strokewidth = 1)
+for (i, wd) in enumerate(All_Nheights) 
+    zval = zn[new_negs_bot .+ z_en][i] .+ 7
+    dellabel =  @sprintf("%0.0f m = %0.1f δ", wd, wd/(pm.U₀/pm.Ñ)) 
+    text!(axrtN, Point.(-2e-6, zval), text = dellabel, align = (:right, :center), color = :black,
+                fontsize = 26)
+end
+
 leg = Legend(ga[1, 1], 
 [ploc, pf, thp, minp, del], tellheight = false,
 ["Profile Location", "Profile", "Measuring Threshold", "Minima After Filtering", "Measured Thickness Between Minima"])
 
-colsize!(f.layout, 2, Auto(.8))
+#colsize!(f.layout, 2, Auto(.8))
 rowsize!(ga, 1, Auto(.7))
 rowgap!(ga, 15)
 
 apath = path_name * "Analysis/"
 
-savename = apath * "Poster_profileLth_" * setname 
+savename = apath * "NoppPoster_profileLth_" * setname 
 save(savename * ".png", f)
 
