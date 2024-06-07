@@ -60,15 +60,15 @@ using Parameters
             σ=5.5*V₀ˢ/(2.5*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
     U250Nfd300Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(3.0*δˢ), f=2.5*V₀ˢ/(3.0*δˢ*10.7), 
             σ=5.5*V₀ˢ/(3.0*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
-    U250Nfd350Lz130g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(3.5*δˢ), f=2.5*V₀ˢ/(3.5*δˢ*10.7), 
+    U250Nfd350Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(3.5*δˢ), f=2.5*V₀ˢ/(3.5*δˢ*10.7), 
             σ=5.5*V₀ˢ/(3.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U250Nfd400Lz130g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.0*δˢ), f=2.5*V₀ˢ/(4.0*δˢ*10.7), 
+    U250Nfd400Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.0*δˢ), f=2.5*V₀ˢ/(4.0*δˢ*10.7), 
             σ=5.5*V₀ˢ/(4.0*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U250Nfd450Lz130g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.5*δˢ), f=2.5*V₀ˢ/(4.5*δˢ*10.7), 
+    U250Nfd450Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.5*δˢ), f=2.5*V₀ˢ/(4.5*δˢ*10.7), 
             σ=5.5*V₀ˢ/(4.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=1.7*dtˢ))
-    U250Nfd500Lz130g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.0*δˢ), f=2.5*V₀ˢ/(5.0*δˢ*10.7), 
+    U250Nfd500Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.0*δˢ), f=2.5*V₀ˢ/(5.0*δˢ*10.7), 
             σ=5.5*V₀ˢ/(5.0*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=1.9*dtˢ))
-    U250Nfd550Lz130g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.5*δˢ), f=2.5*V₀ˢ/(5.5*δˢ*10.7), 
+    U250Nfd550Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.5*δˢ), f=2.5*V₀ˢ/(5.5*δˢ*10.7), 
             σ=5.5*V₀ˢ/(5.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=2.1*dtˢ))
    
     # varying N a little more closely at the small values
@@ -89,23 +89,27 @@ using Parameters
     U500Nfd78Lz100g100 = merge(const_params,(;U₀=5.0*V₀ˢ,  Ñ=5.0*V₀ˢ/(0.78*δˢ), f=5.0*V₀ˢ/(0.78*δˢ*10.7), 
             σ=11.0*V₀ˢ/(0.78*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=0.2*dtˢ))
 
-    # varying sigma on its own to change criticality
-    U150N100Lz100g70s125 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=1.404))
-    U150N100Lz100g30s250 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=0.603))
-    U450N100Lz100g70s125 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=1.404))
-    U450N100Lz100g30s250 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=0.603))
+    # varying sigma on its own to change criticality Lx = Lxˢ
+    U150N100Lz100g70s125 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=1.404, dt=0.8*dtˢ))
+    U150N100Lz100g30s250 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=0.603, dt=0.4*dtˢ))
+    U150N100Lz100g30s80 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=0.8*fˢ, Lz=Lzˢ,     γ=0.603, dt=dtˢ))
+    U450N100Lz100g70s80 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=0.8*fˢ, Lz=Lzˢ,     γ=1.404, dt=dtˢ))
+    U450N100Lz100g70s125 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=1.404, dt=0.8*dtˢ))
+    U450N100Lz100g30s250 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=0.603, dt=0.4*dtˢ))
 
-    # varying sigma on its own no change to criticality
-    U150N100Lz100g100s125 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=γᶜ))
-    U150N100Lz100g100s250 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=γᶜ))
-    U450N100Lz100g100s125 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,     γ=γᶜ))
-    U450N100Lz100g100s250 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,     γ=γᶜ))
+    # varying sigma on its own no change to criticality (changes topo)
+    U150N100Lz100g100s125 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,   γ=γᶜ, dt=0.8*dtˢ))
+    U150N100Lz100g100s250 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,   γ=γᶜ, dt=0.4*dtˢ))
+    U150N100Lz100g100s80 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=1.8*fˢ, Lz=Lzˢ,    γ=γᶜ, dt=dtˢ))
+    U450N100Lz100g100s80 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=1.8*fˢ, Lz=Lzˢ,    γ=γᶜ, dt=dtˢ))
+    U450N100Lz100g100s125 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=2.8*fˢ, Lz=Lzˢ,   γ=γᶜ, dt=0.8*dtˢ))
+    U450N100Lz100g100s250 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=5.5*fˢ, Lz=Lzˢ,   γ=γᶜ, dt=0.4*dtˢ))
 
     # varying criticality without varying sigma
-    U150N100Lz100g70s100 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,         γ=1.4))
-    U150N100Lz100g30s100 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=0.6*Lzˢ,     γ=0.6))
-    U450N100Lz100g70s100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,         γ=1.4))
-    U450N100Lz100g30s100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=0.6*Lzˢ,     γ=0.6))
+    U150N100Lz100g70s100 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,         γ=1.4, dt=dtˢ))
+    U150N100Lz100g30s100 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=0.6*Lzˢ,     γ=0.6, dt=dtˢ))
+    U450N100Lz100g70s100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,         γ=1.4, dt=dtˢ))
+    U450N100Lz100g30s100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=0.6*Lzˢ,     γ=0.6, dt=dtˢ))
 
 end
  
