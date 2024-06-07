@@ -24,8 +24,10 @@ pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
         
 filescalename = path_name * "BFluxTrip_rAvg_prof_mp_" * sn1  * ".jld2"
 fsc2 = path_name * "BFluxTripdbdt_rAvg_prof_mp.jld2"
+fsc3 = path_name * "BFluxTripb_rAvg_prof_mp.jld2"
 scale_file = jldopen(filescalename, "r+")
 dbdt_file = jldopen(fsc2, "r+")
+b_file = jldopen(fsc3, "r+")
 
 skeys = keys(scale_file)
 
@@ -45,8 +47,16 @@ dt_b_rWavg_prof150 = dbdt_file["dt_b_rWavg_prof150"];
 dt_b_rWavg_prof250 = dbdt_file["dt_b_rWavg_prof250"];
 dt_b_rWavg_prof300 = dbdt_file["dt_b_rWavg_prof300"];
 
+b_rWavg_prof150 = b_file["b_rWavg_prof150"];
+b_rWavg_prof250 = b_file["b_rWavg_prof250"];
+b_rWavg_prof300 = b_file["b_rWavg_prof300"];
+
 ∇_rWavg_prof = ∇_phasedep_rWavg_prof .+ ∇_turb_rWavg_prof;
 dbdt_rWavg_prof = ∇_rWavg_prof .+ SGS_rWavg_prof[2:end, 16:end-15];
+
+Δb150 = b_rWavg_prof150 .- b_rWavg_prof150[:,1]
+Δb250 = b_rWavg_prof250 .- b_rWavg_prof250[:,1]
+Δb300 = b_rWavg_prof300 .- b_rWavg_prof300[:,1]
 
 zL = 75
 HAB = 2:2:zL*2

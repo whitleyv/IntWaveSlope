@@ -15,7 +15,7 @@ pm = getproperty(SimParams(), Symbol(sn))
 pm = merge(pm, (; Tanθ = sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
                 Tanα = pm.γ * sqrt((pm.σ^2 - pm.f^2)/(pm.Ñ^2-pm.σ^2)),
                 nz = round(Int,pm.Lz/2),
-                m = -π/pm.Lz,
+                m = π/pm.Lz,
                 l = sqrt(((π/pm.Lz)^2 * (pm.f^2 - pm.σ^2)) / (pm.σ^2 - pm.Ñ^2)),
                 Tf = 2*π/pm.f, 
                 Tσ = 2*π/pm.σ))
@@ -101,9 +101,20 @@ beg3waves = wave_info.WavePeriods[:,2:4] # t = 1T : t = 4T
 trans3waves = wave_info.WavePeriods[:,5:7] # t = 4T : t = 7T
 
 fullwaves = wave_info.WavePeriods[:,3:end] # t = 4T : t = 7T
+fullwaves = wave_info.WavePeriods[:,4:end] # t = 4T : t = 7T
 
 # reorienting into phases
 # x y z Ph W
+function phase_orient(indexing, bi, v_ccc, w_ccc)
+    b_Ph = bi[:,:,:,indexing]
+    v_Ph = v_ccc[:,:,:,indexing]
+    w_Ph = w_ccc[:,:,:,indexing]
+
+    PhaseOrientVals = (; b_Ph, v_Ph, w_Ph)
+
+    return PhaseOrientVals
+end
+
 function phase_orient(indexing, bi, v_ccc, w_ccc, ci, SGSi)
     b_Ph = bi[:,:,:,indexing]
     v_Ph = v_ccc[:,:,:,indexing]
@@ -194,6 +205,23 @@ function phaseaveraging(PhaseOrientVals, WaveAveragedVals)
     return PhaseAveragedVals, PhaseDependentVals
 end
 
+function phaseaveraging(PhaseOrientVals, WaveAveragedVals)
+    v_Phavg = mean(PhaseOrientVals.v_Ph, dims = (5))[:,:,:,:,1];
+    w_Phavg = mean(PhaseOrientVals.w_Ph, dims = (5))[:,:,:,:,1];
+    b_Phavg = mean(PhaseOrientVals.b_Ph, dims = (5))[:,:,:,:,1];
+
+    # x y z Ph .- x y z = x y z Ph
+    v_Phdep = v_Phavg .- WaveAveragedVals.v_Wavg
+    w_Phdep = w_Phavg .- WaveAveragedVals.w_Wavg
+    b_Phdep = b_Phavg .- WaveAveragedVals.b_Wavg
+    PhaseDependentVals = (; v_Phdep, w_Phdep, b_Phdep)
+
+    PhaseAveragedVals = (;v_Phavg, w_Phavg, b_Phavg)
+    PhaseDependentVals = (; v_Phdep, w_Phdep, b_Phdep)
+    
+    return PhaseAveragedVals, PhaseDependentVals
+end
+
 PhaseAveragedVals_end, PhaseDependentVals_end = phaseaveraging(PhaseOrientVals_end, WaveAveragedVals_end)
 PhaseAveragedVals_beg, PhaseDependentVals_beg = phaseaveraging(PhaseOrientVals_beg, WaveAveragedVals_beg)
 PhaseAveragedVals_mid, PhaseDependentVals_mid = phaseaveraging(PhaseOrientVals_mid, WaveAveragedVals_mid)
@@ -209,6 +237,16 @@ function turbulentquants(PhaseOrientVals, PhaseAveragedVals)
     c_turb = PhaseOrientVals.c_Ph .- PhaseAveragedVals.c_Phavg
 
     TurbVals = (;v_turb, w_turb, c_turb, b_turb)
+
+    return TurbVals
+end
+
+function turbulentquants(PhaseOrientVals, PhaseAveragedVals)
+    v_turb = PhaseOrientVals.v_Ph .- PhaseAveragedVals.v_Phavg
+    w_turb = PhaseOrientVals.w_Ph .- PhaseAveragedVals.w_Phavg
+    b_turb = PhaseOrientVals.b_Ph .- PhaseAveragedVals.b_Phavg
+
+    TurbVals = (;v_turb, w_turb, b_turb)
 
     return TurbVals
 end
@@ -288,6 +326,20 @@ FluxDiv_turbWavg_full, FluxDiv_phasedepWavg_full = Flux_Divergence(Δy, Δz, boo
 
 phase_times = b_timeseries.times[wave_info.WavePeriods[:,1]]/pm.Tσ
 
+function Advective_Flux(Δy, Δz, boolZY, WaveAveragedVals)
+
+    # (x,y,z)
+    b_Wavg_dz = ((WaveAveragedVals.b_Wavg[:,2:end,1:end-1] .- WaveAveragedVals.b_Wavg[:,2:end,2:end])./Δz) .* boolZY;
+    b_Wavg_dy = ((WaveAveragedVals.b_Wavg[:,1:end-1,2:end] .- WaveAveragedVals.b_Wavg[:,2:end,2:end])./Δy) .* boolZY;
+    
+    v_b_Wavg_dy = WaveAveragedVals.v_Wavg[:,2:end,2:end] .* b_Wavg_dy
+    w_b_Wavg_dz = WaveAveragedVals.w_Wavg[:,2:end,2:end] .* b_Wavg_dz
+    u∇b_Wavg = v_b_Wavg_dy .+ w_b_Wavg_dz;
+    
+    return u∇b_Wavg
+end
+
+u∇b_Wavg_full = Advective_Flux(Δy, Δz, boolZYX, WaveAveragedVals_full)
 @info "Saving Files..."
 
 function savefluxes(savename, apath, FluxDiv_turbWavg, FluxDiv_phasedepWavg, PhaseDependentVals, TurbVals, WaveAveragedVals, FluxVals, yb, zb, phase_times)
@@ -313,5 +365,31 @@ savefluxes("BFluxTrip_beg_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_b
 savefluxes("BFluxTrip_mid_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_mid, FluxDiv_phasedepWavg_mid, 
     PhaseDependentVals_mid, TurbVals_mid, WaveAveragedVals_mid, FluxVals_mid, yb, zb, phase_times)
 
-savefluxes("BFluxTrip_full_mp_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_full, FluxDiv_phasedepWavg_full, 
-    PhaseDependentVals_dull, TurbVals_full, WaveAveragedVals_full, FluxVals_full, yb, zb, phase_times)
+savefluxes("BFluxTrip_full_mp_noS_" * sn, path_name * "Analysis/", FluxDiv_turbWavg_full, FluxDiv_phasedepWavg_full, 
+    PhaseDependentVals_full, TurbVals_full, WaveAveragedVals_full, FluxVals_full, u∇b_Wavg_full, yb, zb, phase_times)
+
+function savefluxes(savename, apath, FluxDiv_turbWavg, FluxDiv_phasedepWavg, PhaseDependentVals, TurbVals, WaveAveragedVals, FluxVals, u∇b_Wavg, yb, zb, phase_times)
+    
+        filescalename = apath * savename * ".jld2"
+    
+        jldsave(filescalename; 
+        FluxDiv_turbWavg,
+        FluxDiv_phasedepWavg,
+        PhaseDependentVals,
+        TurbVals,
+        WaveAveragedVals,
+        FluxVals, u∇b_Wavg,
+        yb, zb, phase_times)
+end
+
+jldsave(path_name * "Analysis/BFluxTrip_full_mp_noS_xavg_" * sn; 
+∇_phasedepWavg_xavg,
+∇_turbWavg_xavg,
+vb_phasedepWavg_dy_xavg,
+wb_phasedepWavg_dz_xavg,
+vb_turbWavg_dy_xavg,
+wb_turbWavg_dz_xavg,
+SGS_Wavg_xavg,
+u∇b_Wavg_xavg,
+yb, zb)
+
