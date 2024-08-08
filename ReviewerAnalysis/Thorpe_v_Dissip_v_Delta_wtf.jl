@@ -181,7 +181,7 @@ for (m, setname) in enumerate(setnames)
         rWtlength = cutWtlength - hWl
     end
 
-    LtcutWtlength = length(W3length:tlength)
+    LtcutWtlength = length(wave_info.WavePeriods[W3length:W11length])
 
     @info "Calculating Tracer Thicknesses..."
 
