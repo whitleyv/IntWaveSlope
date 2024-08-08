@@ -6,7 +6,7 @@ using CairoMakie
 using GeometryBasics
 using CurveFit
 
-apath = "Analysis/Plots/"
+apath = "Analysis/PaperFigures/FinalPaperFigures/FinalFiguresUsed/"
 dpath = "Data/"
 
 # setnames
@@ -141,7 +141,7 @@ f = Figure(resolution = (1050, 700), fontsize=26)
 display(f)                         
 savename = apath * "Paper_Thorpe_v_Delta_rms_flipped_"
 save(savename * ".png", f, px_per_unit = 2) 
-=#
+
 
 f = Figure(resolution = (700, 1050), fontsize=26)
     #set_theme!(fonts = (; regular = "TeX Gyre Heros Makie Regular", bold = "TeX Gyre Heros Makie Bold", bold_italic = "TeX Gyre Heros Makie Bold Italic", italic = "TeX Gyre Heros Makie Italic"))
@@ -186,19 +186,19 @@ display(f)
 display(f)                         
 savename = apath * "Paper_Thorpe_v_Delta_rms_flipped2_"
 save(savename * ".png", f, px_per_unit = 2) 
+=#
 
-#=
 # thorpe scale vs dissipation
 f = Figure(resolution = (1500, 800), fontsize=26)
     ga = f[1, 1] = GridLayout()
 
-    ax1 = Axis(ga[2, 1],  ylabel = rich("L", subscript("t"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3")), yscale = log10, xscale = log10,
+    ax1 = Axis(ga[2, 1],  ylabel = rich("L", subscript("t"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3"), "]"), yscale = log10, xscale = log10,
     xlabel = "ϵ̄ [m²s⁻³]", xlabelsize=35, ylabelsize=35)
     #ax1.yticks = ( 10 .^(-5.5:.5:-3), ["0", "5×10⁻⁴", "1×10⁻³"])
     #ax1.xticks = (0:1e-5:3e-5, ["0", "1×10⁻⁵", "2×10⁻⁵", "3×10⁻⁵"])
     limits!(ax1, 1e-7, 10^-(4.25), 1e-6, 10^(-2.75))
     
-    ax2 = Axis(ga[2, 2],  ylabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3")),  yscale = log10,xscale = log10,
+    ax2 = Axis(ga[2, 2],  ylabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3"), "]"),  yscale = log10,xscale = log10,
     xlabel = "ϵ̄ [m²s⁻³]", xlabelsize=35, ylabelsize=35)
     #ax2.yticks = (1e:5*1e-4:1e-3, ["0", "5×10⁻⁴", "1×10⁻³"])
     #ax2.xticks = (0:1e-5:3e-5, ["0", "1×10⁻⁵", "2×10⁻⁵", "3×10⁻⁵"])
@@ -247,10 +247,10 @@ f = Figure(resolution = (1500, 800), fontsize=26)
                     padding = (5, 5, 5, 5),
                     halign = :left)
 display(f)
-savename = apath * "Paper_Dissip_v_Thorpe_v_Delta_rms_log"
+savename = apath * "Paper_Dissip_v_Thorpe_v_Delta_rms_log_fixedbracket"
 save(savename * ".png", f, px_per_unit = 2)
 
-
+#=
 # thorpe scale vs dissipation
 f = Figure(resolution = (1500, 800), fontsize=26)
     ga = f[1, 1] = GridLayout()
