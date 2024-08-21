@@ -73,7 +73,7 @@ y_en = round(Int, 2500/4) # just choosing this y value to include most of dye ex
 zlength_sm = length(z_en:z_st)
 ylength_sm = length(y_st:y_en)
 
-filesetnames = "SetList_mp.jld2"
+filesetnames = "../IBMCode/Oceananigans.jl/SetList_mp.jld2"
 
 scale_file = jldopen(filesetnames, "r+")
 
@@ -104,11 +104,16 @@ setname  = setnames[m]
 #name_prefix = "vIntWave_" * setname
 name_prefix = sfiles[m] * setname
 filepath = path_name * name_prefix * ".jld2"
+#cfilepath = path_name * "Cs_mp_noS_U350N100Lz100g100.jld2"
+# cfile = jldopen(cfilepath, "r+")
+# ci = cfile["ci"]
+# Cs_mp_noS_U350N100Lz100g100.jld2
 @info "getting data from: " * setname
 
 c_timeseries = FieldTimeSeries(filepath, "Cs");
 xc, yc, zc = nodes(c_timeseries) #CCC
 tlength = length(c_timeseries.times)
+
 pm2 = getproperty(SimParams(), Symbol(setname))
 
 pm2 = merge(pm2, (; Tanθ = sqrt((pm2.σ^2 - pm2.f^2)/(pm2.Ñ^2-pm2.σ^2)),
@@ -268,3 +273,69 @@ for (j, i) in enumerate((wave_info.WavePeriods[W7length:W11length]))
 
     
 end
+
+# for boot strapping everything needs to stay in columns:
+
+ci_xavg = mean(ci[:,:, z_en:z_st, :], dims =1)[1,:,:, :]
+All_Cheights_thresh = zeros(cutWtlength, numRes)
+All_Cheights_nothresh = zeros(cutWtlength, numRes)
+
+for (j, i) in enumerate((wave_info.WavePeriods[W7length:W11length]))
+    # pulling c values within range
+
+    # instead of a rolling window, average each row only if the value has any dye,   
+    # see what that looks like compared to just straight averaging
+    cmi_thresh = zeros(zlength_sm)
+    cmi_nothresh = zeros(zlength_sm)
+    ci_xavg_t = ci_xavg[:,:,i]
+    #@info "tidx = $i"
+    for (k, depth_idx) in enumerate(z_en:z_st) # at each depth
+        y_slope_val = -zc[depth_idx]./ pm2.Tanα
+        y_slope_idx = round(Int,y_slope_val/4)
+        y_cutstart = maximum([y_st, y_slope_idx+4])
+
+        ci_k = ci_xavg_t[y_cutstart:y_en,k]
+
+        cmi_thresh[k] =  mean(ci_k[ci_k .> 1e-16])
+        cmi_nothresh[k] = mean(ci_k)
+
+    end
+
+    Δc_thresh = cmi_thresh[1:end-1]-cmi_thresh[2:end]
+    Δc_nothresh = cmi_nothresh[1:end-1]-cmi_nothresh[2:end]
+
+    dcdz_thresh = Δc_thresh /-2
+    dcdz_nothresh = Δc_nothresh /-2
+
+    roots_thresh = findroots(dcdz_thresh)
+    roots_nothresh = findroots(dcdz_nothresh)
+
+    (intru_thresh, rt_zst_thresh, rt_zen_thresh)= find_intrusions(roots_thresh, cmi_thresh)
+    (intru_nothresh, rt_zst_nothresh, rt_zen_nothresh)= find_intrusions(roots_nothresh, cmi_nothresh)
+
+    All_Cheights_nothresh[j, 1:length(intru_nothresh)] = intru_nothresh
+    All_Cheights_thresh[j, 1:length(intru_thresh)] = intru_thresh
+
+    
+end
+
+Fin_numRes_idx = sum(cond_gt0.(maximum(All_Cheights_nothresh, dims = (1))[1,:]))
+Cut_Cheights_nothresh = All_Cheights_nothresh[:, 1:Fin_numRes_idx]
+
+Fin_numRes_idx = sum(cond_gt0.(maximum(All_Cheights_thresh, dims = (1))[1,:]))
+Cut_Cheights_thresh = All_Cheights_thresh[:,1:Fin_numRes_idx]
+
+using Boothstrap
+
+#Let's bootstrap the mean of our data, based on 1000 resamples
+nboot = 1000
+bs_basic_nothresh = bootstrap(mean, Cut_Cheights_nothresh[Cut_Cheights_nothresh .> 0], BasicSampling(nboot))
+bs_basic_thresh = bootstrap(mean, Cut_Cheights_thresh[Cut_Cheights_thresh .> 0], BasicSampling(nboot))
+cil = 0.95
+bcil_95_nothresh = confint(bs_basic_nothresh, BasicConfInt(cil))
+bcil_95_thresh = confint(bs_basic_thresh, BasicConfInt(cil))
+
+bs_maxent_nothresh = bootstrap(mean, Cut_Cheights_nothresh[Cut_Cheights_nothresh .> 0], MaximumEntropySampling(nboot))
+bs_maxent_thresh = bootstrap(mean, Cut_Cheights_thresh[Cut_Cheights_thresh .> 0], MaximumEntropySampling(nboot))
+mecil_95_nothresh = confint(bs_maxent_nothresh, BasicConfInt(cil))
+mecil_95_thresh = confint(bs_maxent_thresh, BasicConfInt(cil))
