@@ -8,16 +8,37 @@ dpath = "ReviewerAnalysis/ReviewerData/"
 apath = "ReviewerAnalysis/ReviewerPlots/"
 
 filescalename = dpath * "DeltavAll_ExtraStats.jld2"
+fileerrorname = dpath * "Delta_v_all_Confint.jld2"
 filesetnames =  "SetList_mp.jld2"
 
 file_sn = jldopen(filesetnames, "r+")
 file_scale = jldopen(filescalename, "r+")
+file_error = jldopen(fileerrorname, "r+")
 
 Thorpe_rms = file_scale["Thorpe_rms"]
 Thorpe_stats = file_scale["Thorpe_stats"]
 Nheight_stats = file_scale["Nheight_stats"]
 Cheight_stats = file_scale["Cheight_stats"]
 Dissip_stats = file_scale["Dissip_stats"]
+
+lower_confint_tracer = file_error["lower_confint_tracer"]
+upper_confint_tracer = file_error["upper_confint_tracer"]
+lower_confint_stratanom = file_error["lower_confint_stratanom"]
+upper_confint_stratanom = file_error["upper_confint_stratanom"]
+lower_confint_thorpe = file_error["lower_confint_thorpe"]
+upper_confint_thorpe = file_error["upper_confint_thorpe"]
+lower_confint_dissiptime = file_error["lower_confint_dissiptime"]
+upper_confint_dissiptime = file_error["upper_confint_dissiptime"]
+lower_confint_dissipall = file_error["lower_confint_dissipall"]
+upper_confint_dissipall = file_error["upper_confint_dissipall"]
+
+# thorpe is actually exponential scaling:
+λ̄ = (Thorpe_stats[:, 5] .- 2) ./ (Thorpe_stats[:, 1] .* Thorpe_stats[:, 5])
+degs_freedom = 120
+λ_upper =  λ̄ .* (1 - 1.96/√degs_freedom)
+λ_lower =  λ̄ .* (1 + 1.96/√degs_freedom)
+Thorpe_mean_upper = 1 ./ λ_upper
+Thorpe_mean_lower = 1 ./ λ_lower
 
 U_UN = file_sn["Us"]
 N_UN = file_sn["Ns"]
@@ -27,6 +48,7 @@ N_UN = file_sn["Ns"]
 
 idx_subcritical_σ = findall(γ_σ .< 1)
 idx_gammachange_σ = findall(γ_σ .!= 1.9)
+idx_supcritical_σ = findall((γ_σ .> 1) .& ( γ_σ .!= 1.9))
 idx_VaryN_start = findfirst(N_UN .> 3.51e-3)
 idx_VaryN = idx_VaryN_start:idx_VaryN_start+10
 idx_VaryU_start = findfirst(U_UN .< 0.25)
@@ -386,8 +408,8 @@ f = Figure(resolution = (1200, 1200), fontsize=26)
     rangebars!(ax2, δ_UN[idx_VaryU], 
             Nheight_stats[idx_VaryU, 7], Nheight_stats[idx_VaryU, 8]; linewidth = 2, color = :gray70)
     # mean
-#    scatter!(ax2, δ_σ[idx_gammachange_σ], Nheight_stats[22 .+ idx_gammachange_σ, 1],  markersize = 25, marker=:star4, 
-#            color =:gray50)
+        #    scatter!(ax2, δ_σ[idx_gammachange_σ], Nheight_stats[22 .+ idx_gammachange_σ, 1],  markersize = 25, marker=:star4, 
+        #            color =:gray50)
   #  scatter!(ax2, δ_σ[idx_subcritical_σ], Nheight_stats[22 .+ idx_subcritical_σ, 1], markersize = 25, 
   #          marker=Polygon(p_big, [p_small]), color= :gray50)
     scatter!(ax2, δ_UN[idx_VaryN], Nheight_stats[idx_VaryN, 1], markersize = 25, marker = :circle, 
@@ -472,5 +494,121 @@ f = Figure(resolution = (1200, 1200), fontsize=26)
     font = :bold,
     padding = (-10, 5, 5, 10),
     )
-=#
-    save(apath * "Delta_v_All_Medians.png", f) 
+        =#
+save(apath * "Delta_v_All_Medians.png", f) 
+
+# plotting all means and medians and true error bars
+function plotting_everything_for_stat(ax, x_UN, x_σ, yval_stats, yval_err_up, yval_err_down)
+
+
+        # median
+        scatter!(ax, x_σ[idx_gammachange_σ], yval_stats[22 .+ idx_gammachange_σ, 2],  markersize = 25, marker=:star4, 
+                color =:gray50)
+        scatter!(ax, x_σ[idx_subcritical_σ], yval_stats[22 .+ idx_subcritical_σ, 2], markersize = 25, 
+                marker=Polygon(p_big, [p_small]), color= :gray50)
+        medn = scatter!(ax, x_UN[idx_VaryN], yval_stats[idx_VaryN, 2], markersize = 25, marker = :circle, 
+                color =:gray50)
+        scatter!(ax, x_UN[idx_VaryU], yval_stats[idx_VaryU, 2], markersize = 25, marker=:utriangle, 
+                color = :gray50)
+
+        # error bars
+        errsp = rangebars!(ax, x_σ[idx_gammachange_σ],  
+                yval_err_down[idx_gammachange_σ], yval_err_up[idx_gammachange_σ]; linewidth = 5, color = :darkgreen)
+        errN = rangebars!(ax, x_UN[idx_VaryN], 
+                yval_err_down[idx_VaryN], yval_err_up[idx_VaryN]; linewidth = 4, color = :firebrick2)
+        errV = rangebars!(ax, x_UN[idx_VaryU], 
+                yval_err_down[idx_VaryU], yval_err_up[idx_VaryU]; linewidth = 3, color = :dodgerblue2)
+
+        # mean
+        vsp1 = scatter!(ax, x_σ[idx_gammachange_σ], yval_stats[22 .+ idx_gammachange_σ, 1],  markersize = 25, marker=:star4, 
+                color =:darkgreen, strokewidth = 1, strokecolor = :black)
+        vsbp = scatter!(ax, x_σ[idx_subcritical_σ], yval_stats[22 .+ idx_subcritical_σ, 1], markersize = 25, 
+                marker=Polygon(p_big, [p_small]), color= :darkgoldenrod)
+        vnp = scatter!(ax, x_UN[idx_VaryN], yval_stats[idx_VaryN, 1], markersize = 25, marker = :circle, 
+                color =:firebrick2, strokewidth = 1, strokecolor = :black)
+        vump = scatter!(ax, x_UN[idx_VaryU], yval_stats[idx_VaryU, 1], markersize = 25, marker=:utriangle, 
+                color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+        
+        return errsp, vsp1, vsbp, vnp, vump, medn
+end
+
+function plotting_everything_for_stat(ax, x_UN, x_σ, yval_stats, yval_err_up, yval_err_down, idx_supcritical_σ)
+
+
+        # median
+        scatter!(ax, x_σ[idx_supcritical_σ], yval_stats[22 .+ idx_supcritical_σ, 2],  markersize = 25, marker=:star4, 
+                        color =:gray50)
+        medn = scatter!(ax, x_UN[idx_VaryN], yval_stats[idx_VaryN, 2], markersize = 25, marker = :circle, 
+                color =:gray50)
+        scatter!(ax, x_UN[idx_VaryU], yval_stats[idx_VaryU, 2], markersize = 25, marker=:utriangle, 
+                color = :gray50)
+
+        # error bars
+        errsp = rangebars!(ax, x_σ[idx_supcritical_σ],  
+                yval_err_down[idx_supcritical_σ], yval_err_up[idx_supcritical_σ]; linewidth = 5, color = :darkgreen)
+        errN = rangebars!(ax, x_UN[idx_VaryN], 
+                yval_err_down[idx_VaryN], yval_err_up[idx_VaryN]; linewidth = 4, color = :firebrick2)
+        errV = rangebars!(ax, x_UN[idx_VaryU], 
+                yval_err_down[idx_VaryU], yval_err_up[idx_VaryU]; linewidth = 3, color = :dodgerblue2)
+
+        # mean
+        vsp1 = scatter!(ax, x_σ[idx_supcritical_σ], yval_stats[22 .+ idx_supcritical_σ, 1],  markersize = 25, marker=:star4, 
+                        color =:darkgreen, strokewidth = 1, strokecolor = :black)
+        vnp = scatter!(ax, x_UN[idx_VaryN], yval_stats[idx_VaryN, 1], markersize = 25, marker = :circle, 
+                color =:firebrick2, strokewidth = 1, strokecolor = :black)
+        vump = scatter!(ax, x_UN[idx_VaryU], yval_stats[idx_VaryU, 1], markersize = 25, marker=:utriangle, 
+                color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+        
+        return errsp, vsp1, vsbp, vnp, vump, medn
+end
+
+f = Figure(resolution = (1300, 1200), fontsize=26)
+    ga = f[1, 1] = GridLayout()
+
+    ax1 = Axis(ga[2, 1], ylabel =  rich("L", subscript("tr")," [m]"), 
+        xlabelsize=30, ylabelsize=30)
+        ax1.xticks = 0:40:200
+        ax1.yticks = 0:40:200
+        limits!(ax1, 0,165,0,210) 
+
+    ax2 = Axis(ga[2, 2], ylabel = "Lₙ [m]", 
+        xlabelsize=30, ylabelsize=30)
+        ax2.xticks = 0:40:200
+        ax2.yticks = 0:40:200
+        limits!(ax2, 0,165,0,120) 
+
+    ax3 = Axis(ga[3, 1],  xlabel = rich("h", subscript("w"), " [m]"), ylabel =  "Lₜ [m]", 
+        xlabelsize=30, ylabelsize=30)
+        ax3.xticks = 0:40:200
+        ax3.yticks = 0:10:200
+        limits!(ax3, 0,165,0,40) 
+
+    ax4 = Axis(ga[3, 2],  ylabel = "ϵ [m²s⁻³]", xlabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s⁻³]"), 
+        xscale = log10, yscale = log10,
+        xlabelsize=30, ylabelsize=30)
+        limits!(ax4, 10^(-5.7), 10^(-2.75), 1e-8, 10^(-4), )
+
+    p_big = decompose(Point2f, Circle(Point2f(0), 0.6))
+    p_small = decompose(Point2f, Circle(Point2f(0), 0.5))
+
+    #### TRACER
+    (errsp, vsp1, vsbp, vnp, vump, medn) = plotting_everything_for_stat(ax1, δ_UN, δ_σ, Cheight_stats, upper_confint_tracer, lower_confint_tracer)
+    #### STARTIFICATION
+
+    (_, _, _, _, _, _) = plotting_everything_for_stat(ax2, δ_UN, δ_σ, Nheight_stats, upper_confint_stratanom, lower_confint_stratanom, idx_supcritical_σ)
+
+    (_, _, _, _, _, _) = plotting_everything_for_stat(ax3, δ_UN, δ_σ, Thorpe_stats, Thorpe_mean_upper, Thorpe_mean_lower)
+
+    (_, _, _, _, _, _) = plotting_everything_for_stat(ax4, δ_UN .^ 2 .* N_UN.^3, δ_σ.^ 2 .* (N_UN[1])^3, Dissip_stats, upper_confint_dissiptime, lower_confint_dissiptime)
+
+
+    Legend( ga[1, 1:2],  [vnp, vump, vsp1, vsbp, medn, errsp], ["Vary N₀", "Vary V₀", "Vary γ", "Subcritical", 
+        "Median", "95% Confidence"],
+        tellheight = false, tellwidth = false, rowgap = 30, colgap = 30,
+        margin = (10, 10, 50, -5), framevisible = false, patchlabelgap = 7,
+        labelsize = 30, 
+        halign = :center, valign = :top, orientation = :horizontal)
+
+    rowsize!(ga,1, Auto(0.05))      
+
+save(apath * "Delta_v_All_MeansMediansError.png", f) 
