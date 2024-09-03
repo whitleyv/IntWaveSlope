@@ -81,9 +81,11 @@ sns = scale_file["setnames"]
 sns_σ = scale_file["setnames_varyσ"][1:4]
 sfiles = scale_file["setfilenames"]
 sfiles_σ = scale_file["setfilenames_varyσ"][1:4]
+sns_V0B = scale_file["setnames_varyV0B"]
+sfiles_V0B = scale_file["setfilenames_varyV0B"]
 
-setnames = vcat(sns, sns_σ)
-setfiles = vcat(sfiles, sfiles_σ)
+setnames = vcat(vcat(sns, sns_σ), sns_V0B)
+setfiles = vcat(vcat(sfiles, sfiles_σ), sfiles_V0B)
 Lvals = length(setnames)
 
 cond_gt0(y) = y > 0 
@@ -338,6 +340,10 @@ lower_confint_tracer = zeros(Lvals)
 upper_confint_tracer = zeros(Lvals)
 lower_confint_stratanom = zeros(Lvals)
 upper_confint_stratanom = zeros(Lvals)
+mean_tracer = zeros(Lvals)
+mean_stratanom = zeros(Lvals)
+median_tracer = zeros(Lvals)
+median_stratanom = zeros(Lvals)
 lower_confint_thorpe = zeros(Lvals)
 upper_confint_thorpe = zeros(Lvals)
 lower_confint_dissiptime = zeros(Lvals)
@@ -401,7 +407,17 @@ for (m, setname) in enumerate(setnames)
 
     @info "Calculating Tracer Thicknesses..."
     All_Cheights = Find_Tracer_Intrusions(cutWtlength, W7length, W11length, numRes, c_timeseries, yc, zc, wave_info, rolWidy)
+    Cht_havg = zeros(cutWtlength)
+    for i = 1:cutWtlength
+        All_Cheights_i = All_Cheights[i,:,:]
+        All_non0Cheights_i = All_Cheights_i[All_Cheights_i .> 2]
+        Cht_havg[i] = isemp(All_non0Cheights_i) ? 0 : mean(All_non0Cheights_i)
+    end
+    All_non0Cheights_intime = Cht_havg[Cht_havg .> 2]
     All_non0Cheights = All_Cheights[All_Cheights .> 2]
+
+    mean_tracer[m] = mean(All_non0Cheights_intime)
+    median_tracer[m] = median(All_non0Cheights)
 
     @info "Calculating Thorpe Displacements..."
     All_Toverturns = Find_Thorpe_Displacements(LtcutWtlength, W3length, W11length, numRes, b_timeseries, yb, zb, wave_info, bnoise)
@@ -410,6 +426,8 @@ for (m, setname) in enumerate(setnames)
     @info "Calculating Unstable Heights..."
     All_Nheights = Find_StratAnom_Intrusions(rWtlength, W7length, tlength, numRes, N_timeseries, yn, zn, wave_info, rolWidy, rolWidz)
     All_non0Nheights = All_Nheights[cond_gt0.(All_Nheights)]
+    median_stratanom[m] = median(All_non0Nheights)
+    mean_stratanom[m] = mean(All_non0Nheights)
 
     @info "Calculating dissipation Averages..."
     ei = interior(e_timeseries)[:,1:ylength_dissip,1:zlength,W7length:tlength];
@@ -432,12 +450,13 @@ for (m, setname) in enumerate(setnames)
 
     # take the log of the data X:
     log_All_non0Cheights = log.(All_non0Cheights)
+    log_All_non0Cheights_intime = log.(All_non0Cheights_intime)
     log_All_non0Nheights = log.(All_non0Nheights)
     log_All_overturns_overthreshold = log.(All_overturns_overthreshold)
     log_All_dissip_abovethreshold = log.(All_dissip_abovethreshold)
 
     # find the mean and variance
-    mean_log_tracer = mean(log_All_non0Cheights)
+    mean_log_tracer = mean(log_All_non0Cheights_intime)
     var_log_tracer = var(log_All_non0Cheights)
 
     mean_log_stratanom= mean(log_All_non0Nheights)
