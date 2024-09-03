@@ -29,9 +29,6 @@ file_sn = jldopen(filesetnames, "r+")
 file_scale_UN = jldopen(filescalename_UN, "r+")
 file_scale_extraStats = jldopen(filescalename_extraStats, "r+")
 
-# getting the surrounding simulation params out
-file_sn = jldopen(filesetnames, "r+")
-
 U_UN = file_sn["Us"]
 N_UN = file_sn["Ns"]
 N_σ = file_sn["N_varyσ"]
@@ -94,7 +91,7 @@ Lt2_80th = Thorpe_80thpercentile .^ 2
 f = Figure(resolution = (1500, 800), fontsize=26)
     ga = f[1, 1] = GridLayout()
 
-    ax1 = Axis(ga[2, 1],  ylabel = rich("L", subscript("t"), superscript("2")," [m²]"), yscale = log10, xscale = log10,
+    ax1 = Axis(ga[2, 1],  ylabel = rich("L", subscript("T"), superscript("2")," [m²]"), yscale = log10, xscale = log10,
     xlabel = rich("ϵ̄/N", subscript("0"), superscript("3"), " [m²]"), xlabelsize=35, ylabelsize=35)
     limits!(ax1, 3, 1000, 10, 30000)
 
@@ -146,7 +143,7 @@ f = Figure(resolution = (1500, 800), fontsize=26)
 display(f)
 savename = apath * "Paper_Ozmidov_v_Thorpe_v_Delta_rms_log"
 save(savename * ".png", f, px_per_unit = 2)
-
+#=
 # best fit lines between ϵ/N³ vs Lₜ² or h_w², ie. h_w² = m_δ ϵ/N³
 epsN_endAvg_all = vcat(eps_endAvg_σ[idx_gammachange_σ] ./ N_σ[idx_gammachange_σ].^3, eps_endAvg_UN  ./ (N_UN.^ 3 ))
 Lt2_all = vcat(thorpe_rms_σ[idx_gammachange_σ].^2, thorpe_rms_UN.^2)
@@ -396,3 +393,4 @@ f = Figure(resolution = (1500, 800), fontsize=26)
 display(f)
 savename = apath * "Paper_Ozmidov_v_Thorpe_v_Delta_rms_errorbars"
 save(savename * ".png", f, px_per_unit = 2)
+=#
