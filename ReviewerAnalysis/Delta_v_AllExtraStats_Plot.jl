@@ -33,6 +33,7 @@ lower_confint_dissipall = file_error["lower_confint_dissipall"]
 upper_confint_dissipall = file_error["upper_confint_dissipall"]
 
 # thorpe is actually exponential scaling:
+# λ̄ = (Num - 2) / mean * Num = (Num - 2)/sum 
 λ̄ = (Thorpe_stats[:, 5] .- 2) ./ (Thorpe_stats[:, 1] .* Thorpe_stats[:, 5])
 degs_freedom = 120
 λ_upper =  λ̄ .* (1 - 1.96/√degs_freedom)
@@ -45,6 +46,7 @@ N_UN = file_sn["Ns"]
 δ_UN = file_sn["δs"]
 δ_σ = file_sn["δ_varyσ"]
 γ_σ = file_sn["γ_varyσ"]
+N_all = vcat(N_UN, ones(4).* N_UN[1])
 
 idx_subcritical_σ = findall(γ_σ .< 1)
 idx_gammachange_σ = findall(γ_σ .!= 1.9)
@@ -513,7 +515,7 @@ function plotting_everything_for_stat(ax, x_UN, x_σ, yval_stats, yval_err_up, y
 
         # error bars
         errsp = rangebars!(ax, x_σ[idx_gammachange_σ],  
-                yval_err_down[idx_gammachange_σ], yval_err_up[idx_gammachange_σ]; linewidth = 5, color = :darkgreen)
+                yval_err_down[22 .+ idx_gammachange_σ], yval_err_up[22 .+ idx_gammachange_σ]; linewidth = 5, color = :darkgreen)
         errN = rangebars!(ax, x_UN[idx_VaryN], 
                 yval_err_down[idx_VaryN], yval_err_up[idx_VaryN]; linewidth = 4, color = :firebrick2)
         errV = rangebars!(ax, x_UN[idx_VaryU], 
@@ -545,7 +547,7 @@ function plotting_everything_for_stat(ax, x_UN, x_σ, yval_stats, yval_err_up, y
 
         # error bars
         errsp = rangebars!(ax, x_σ[idx_supcritical_σ],  
-                yval_err_down[idx_supcritical_σ], yval_err_up[idx_supcritical_σ]; linewidth = 5, color = :darkgreen)
+                yval_err_down[22 .+ idx_supcritical_σ], yval_err_up[22 .+ idx_supcritical_σ]; linewidth = 5, color = :darkgreen)
         errN = rangebars!(ax, x_UN[idx_VaryN], 
                 yval_err_down[idx_VaryN], yval_err_up[idx_VaryN]; linewidth = 4, color = :firebrick2)
         errV = rangebars!(ax, x_UN[idx_VaryU], 
@@ -599,7 +601,7 @@ f = Figure(resolution = (1300, 1200), fontsize=26)
 
     (_, _, _, _, _, _) = plotting_everything_for_stat(ax3, δ_UN, δ_σ, Thorpe_stats, Thorpe_mean_upper, Thorpe_mean_lower)
 
-    (_, _, _, _, _, _) = plotting_everything_for_stat(ax4, δ_UN .^ 2 .* N_UN.^3, δ_σ.^ 2 .* (N_UN[1])^3, Dissip_stats, upper_confint_dissiptime, lower_confint_dissiptime)
+    (_, _, _, _, _, _) = plotting_everything_for_stat(ax4, δ_UN .^ 2 .* N_UN.^3, δ_σ.^ 2 .* (N_UN[1])^3, Dissip_stats, upper_confint_dissipall .* N_all.^3, lower_confint_dissipall .* N_all.^3)
 
 
     Legend( ga[1, 1:2],  [vnp, vump, vsp1, vsbp, medn, errsp], ["Vary N₀", "Vary V₀", "Vary γ", "Subcritical", 
@@ -611,4 +613,4 @@ f = Figure(resolution = (1300, 1200), fontsize=26)
 
     rowsize!(ga,1, Auto(0.05))      
 
-save(apath * "Delta_v_All_MeansMediansError.png", f) 
+save(apath * "Delta_v_All_MeansMediansError_dissipall.png", f) 
