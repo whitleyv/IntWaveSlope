@@ -34,13 +34,16 @@ using Parameters
     U150N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*1.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,     γ=γᶜ, dt=dtˢ))
     U200N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*2,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,     γ=γᶜ, dt=dtˢ))
     U250N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*2.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ,     γ=γᶜ, dt=dtˢ))
-    U300N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*3,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U350N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*3.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U400N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*4,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U450N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U500N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*5,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
-    U550N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*5.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
+    U300N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*3,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
+    U350N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*3.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
+    U400N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*4,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
+    U450N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
+    U500N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*5,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
+    U550N100Lz100g100 = merge(const_params,(;U₀=V₀ˢ*5.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
 
+    U450N100Lz130g100 = merge(const_params,(;U₀=V₀ˢ*4.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
+    U500N100Lz130g100 = merge(const_params,(;U₀=V₀ˢ*5,      Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
+    U550N100Lz130g100 = merge(const_params,(;U₀=V₀ˢ*5.5,    Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
 
     U250N100Lz100g100Ra = merge(const_params,(;U₀=V₀ˢ*2.5,  Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
     U150N100Lz100g100Ra = merge(const_params,(;U₀=V₀ˢ*1.5,  Ñ=Ñˢ, f=fˢ, σ=σˢ, Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
@@ -61,15 +64,15 @@ using Parameters
     U250Nfd300Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(3.0*δˢ), f=2.5*V₀ˢ/(3.0*δˢ*10.7), 
             σ=5.5*V₀ˢ/(3.0*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
     U250Nfd350Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(3.5*δˢ), f=2.5*V₀ˢ/(3.5*δˢ*10.7), 
-            σ=5.5*V₀ˢ/(3.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
+            σ=5.5*V₀ˢ/(3.5*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
     U250Nfd400Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.0*δˢ), f=2.5*V₀ˢ/(4.0*δˢ*10.7), 
-            σ=5.5*V₀ˢ/(4.0*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=dtˢ))
+            σ=5.5*V₀ˢ/(4.0*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=dtˢ))
     U250Nfd450Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(4.5*δˢ), f=2.5*V₀ˢ/(4.5*δˢ*10.7), 
-            σ=5.5*V₀ˢ/(4.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=1.7*dtˢ))
+            σ=5.5*V₀ˢ/(4.5*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=1.7*dtˢ))
     U250Nfd500Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.0*δˢ), f=2.5*V₀ˢ/(5.0*δˢ*10.7), 
-            σ=5.5*V₀ˢ/(5.0*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=1.9*dtˢ))
+            σ=5.5*V₀ˢ/(5.0*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=1.9*dtˢ))
     U250Nfd550Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ, Ñ=2.5*V₀ˢ/(5.5*δˢ), f=2.5*V₀ˢ/(5.5*δˢ*10.7), 
-            σ=5.5*V₀ˢ/(5.5*δˢ*10.7), Lz=1.3*Lzˢ, γ=γᶜ, dt=2.1*dtˢ))
+            σ=5.5*V₀ˢ/(5.5*δˢ*10.7), Lz=Lzˢ, γ=γᶜ, dt=2.1*dtˢ))
    
     # varying N a little more closely at the small values
     U250Nfd60Lz100g100 = merge(const_params,(;U₀=2.5*V₀ˢ,  Ñ=2.5*V₀ˢ/(0.6*δˢ), f=2.5*V₀ˢ/(0.6*δˢ*10.7), 
