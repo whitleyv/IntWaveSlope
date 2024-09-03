@@ -68,14 +68,14 @@ idx_VaryN = idx_VaryN_start:idx_VaryN_start+10
 idx_VaryU_start = findfirst(U_UN .< 0.25)
 idx_VaryU = idx_VaryU_start:idx_VaryU_start+10
 idx_VaryU2 = findall(δ_U2 .> 120)
-#=
+
 # thorpe scale plot rms vs max
 f = Figure(resolution = (1050, 700), fontsize=26)
     set_theme!(fonts = (; regular = "TeX Gyre Heros Makie Regular", bold = "TeX Gyre Heros Makie Bold", bold_italic = "TeX Gyre Heros Makie Bold Italic", italic = "TeX Gyre Heros Makie Italic"))
 
     ga = f[1, 1] = GridLayout()
 
-    ax1 = Axis(ga[2, 1],  xlabel = rich("h", subscript("w"), " [m]"), ylabel = "Lₜ [m]", xlabelsize=35, ylabelsize=35)
+    ax1 = Axis(ga[2, 1],  xlabel = rich("h", subscript("w"), " [m]"), ylabel = rich("L", subscript("T"), " [m]"), xlabelsize=35, ylabelsize=35)
     # we want a log y axis with ticks at -8 through 0
     ax1.xticks = 0:40:160
     ax1.yticks =  0:20:60
@@ -104,7 +104,7 @@ f = Figure(resolution = (1050, 700), fontsize=26)
 display(f)                         
 savename = apath * "Paper_Thorpe_v_Delta_rms"
 save(savename * ".png", f, px_per_unit = 2) 
-
+#=
 f = Figure(resolution = (1050, 700), fontsize=26)
     #set_theme!(fonts = (; regular = "TeX Gyre Heros Makie Regular", bold = "TeX Gyre Heros Makie Bold", bold_italic = "TeX Gyre Heros Makie Bold Italic", italic = "TeX Gyre Heros Makie Italic"))
 
