@@ -58,58 +58,115 @@ p_big = decompose(Point2f, Circle(Point2f(0), 0.6))
 p_small = decompose(Point2f, Circle(Point2f(0), 0.5))
 
 f = Figure(resolution = (1200, 1550), fontsize=40)
-ga = f[1, 1] = GridLayout()
+    ga = f[1, 1] = GridLayout()
 
-# first plot should be dissipation
-ax2 = Axis(ga[2, 1],  ylabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3"),"]"),  yscale = log10,xscale = log10,
-xlabel = "ϵ̄ [m²s⁻³]", xlabelsize=45, ylabelsize=45)
-limits!(ax2, 1e-7, 10^-(4.25), 10^(-5.5), 10^(-2.75))
+    # first plot should be dissipation
+    ax2 = Axis(ga[2, 1],  ylabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3"),"]"),  yscale = log10,xscale = log10,
+    xlabel = "ϵ̄ [m²s⁻³]", xlabelsize=45, ylabelsize=45)
+    limits!(ax2, 1e-7, 10^-(4.25), 10^(-5.5), 10^(-2.75))
 
-scatter!(ax2, eps_endAvg_σ[idx_gammachange_σ], δN_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
-color =:darkgreen, strokewidth = 1, strokecolor = :black)
-scatter!(ax2, eps_endAvg_σ[idx_subcritical_σ], δN_σ[idx_subcritical_σ], markersize = 30, 
-marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
-scatter!(ax2, eps_endAvg_UN[idx_VaryN], δN_UN[idx_VaryN], markersize = 30, marker = :circle, 
-color =:firebrick2, strokewidth = 1, strokecolor = :black)
-scatter!(ax2, eps_endAvg_UN[idx_VaryU], δN_UN[idx_VaryU], markersize = 30, marker=:dtriangle, 
-color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
-
-# second plot should be tracer thickness
-ax1 = Axis(ga[3, 1],  xlabel = rich("h", subscript("w"), " [m]"), ylabel = rich("L", subscript("tr")," [m]"), 
-xlabelsize=45, ylabelsize=45)
-ax1.xticks = 0:40:160
-ax1.yticks = 0:40:160
-limits!(ax1, 0, 180, 0, 180) 
-
-vsp1 = scatter!(ax1, δ_σ[idx_gammachange_σ], Cheight_havg_tavg_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
-            color =:darkgreen, strokewidth = 1, strokecolor = :black)
-vsbp = scatter!(ax1, δ_σ[idx_subcritical_σ], Cheight_havg_tavg_σ[idx_subcritical_σ], markersize = 30, 
+    scatter!(ax2, eps_endAvg_σ[idx_gammachange_σ], δN_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
+    color =:darkgreen, strokewidth = 1, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_σ[idx_subcritical_σ], δN_σ[idx_subcritical_σ], markersize = 30, 
     marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
-vnp = scatter!(ax1, δ_UN[idx_VaryN], Cheight_havg_tavg_UN[idx_VaryN], markersize = 30, marker = :circle, 
-            color =:firebrick2, strokewidth = 1, strokecolor = :black)
-vump = scatter!(ax1, δ_UN[idx_VaryU], Cheight_havg_tavg_UN[idx_VaryU], markersize = 30, marker=:utriangle, 
-            color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_UN[idx_VaryN], δN_UN[idx_VaryN], markersize = 30, marker = :circle, 
+    color =:firebrick2, strokewidth = 1, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_UN[idx_VaryU], δN_UN[idx_VaryU], markersize = 30, marker=:dtriangle, 
+    color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
 
-Legend( ga[1, 1],  [vnp, vump, vsp1, vsbp], ["Vary N₀", "Vary V₀", "Vary γ", "Subcritical γ"],
-            tellheight = false, tellwidth = false, rowgap = 30, colgap = 30,
-            margin = (10, 10, 10, 5), framevisible = false, patchlabelgap = 7,
-            labelsize = 40,
-            halign = :center, valign = :top, orientation = :horizontal)
-rowsize!(ga, 1, Auto(0.05))       
-colgap!(ga, 40)
+    # second plot should be tracer thickness
+    ax1 = Axis(ga[3, 1],  xlabel = rich("h", subscript("w"), " [m]"), ylabel = rich("L", subscript("tr")," [m]"), 
+    xlabelsize=45, ylabelsize=45)
+    ax1.xticks = 0:40:160
+    ax1.yticks = 0:40:160
+    limits!(ax1, 0, 180, 0, 180) 
 
-Label(ga[2, 1, TopLeft()], "a",
-                fontsize = 30,
-                font = :bold,
-                padding = (-10, 5, 5, 10),
-                halign = :right)
-Label(ga[3, 1, TopLeft()], "b",
-                fontsize = 30,
-                font = :bold,
-                padding = (0, 5, 5, 10),
-                halign = :right)
+    vsp1 = scatter!(ax1, δ_σ[idx_gammachange_σ], Cheight_havg_tavg_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
+                color =:darkgreen, strokewidth = 1, strokecolor = :black)
+    vsbp = scatter!(ax1, δ_σ[idx_subcritical_σ], Cheight_havg_tavg_σ[idx_subcritical_σ], markersize = 30, 
+        marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+    vnp = scatter!(ax1, δ_UN[idx_VaryN], Cheight_havg_tavg_UN[idx_VaryN], markersize = 30, marker = :circle, 
+                color =:firebrick2, strokewidth = 1, strokecolor = :black)
+    vump = scatter!(ax1, δ_UN[idx_VaryU], Cheight_havg_tavg_UN[idx_VaryU], markersize = 30, marker=:utriangle, 
+                color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+    Legend( ga[1, 1],  [vnp, vump, vsp1, vsbp], ["Vary N₀", "Vary V₀", "Vary γ", "Subcritical γ"],
+                tellheight = false, tellwidth = false, rowgap = 30, colgap = 30,
+                margin = (10, 10, 10, 5), framevisible = false, patchlabelgap = 7,
+                labelsize = 40,
+                halign = :center, valign = :top, orientation = :horizontal)
+    rowsize!(ga, 1, Auto(0.05))       
+    colgap!(ga, 40)
+
+    Label(ga[2, 1, TopLeft()], "a",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (-10, 5, 5, 10),
+                    halign = :right)
+    Label(ga[3, 1, TopLeft()], "b",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (0, 5, 5, 10),
+                    halign = :right)
 
 display(f)
 savename = apath * "Paper_Dissip_v_Thickness_v_Delta_rms_log"
 save(savename * ".png", f, px_per_unit = 2)
                 
+
+f = Figure(resolution = (1700, 900), fontsize=40)
+    ga = f[1, 1] = GridLayout()
+
+    # first plot should be dissipation
+    ax2 = Axis(ga[2, 1],  ylabel = rich("h", subscript("w"), superscript("2"),"N", subscript("0"), superscript("3"), " [m²s", superscript("-3"),"]"),  yscale = log10,xscale = log10,
+    xlabel = "ϵ̄ [m²s⁻³]", xlabelsize=45, ylabelsize=45)
+    limits!(ax2, 1e-7, 10^-(4.25), 10^(-5.5), 10^(-2.75))
+
+    scatter!(ax2, eps_endAvg_σ[idx_gammachange_σ], δN_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
+    color =:darkgreen, strokewidth = 1, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_σ[idx_subcritical_σ], δN_σ[idx_subcritical_σ], markersize = 30, 
+    marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+    scatter!(ax2, eps_endAvg_UN[idx_VaryN], δN_UN[idx_VaryN], markersize = 30, marker = :circle, 
+    color =:firebrick2, strokewidth = 1, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_UN[idx_VaryU], δN_UN[idx_VaryU], markersize = 30, marker=:dtriangle, 
+    color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+    # second plot should be tracer thickness
+    ax1 = Axis(ga[2, 2],  xlabel = rich("h", subscript("w"), " [m]"), ylabel = rich("L", subscript("tr")," [m]"), 
+    xlabelsize=45, ylabelsize=45)
+    ax1.xticks = 0:40:160
+    ax1.yticks = 0:40:160
+    limits!(ax1, 0, 180, 0, 180) 
+
+    vsp1 = scatter!(ax1, δ_σ[idx_gammachange_σ], Cheight_havg_tavg_σ[idx_gammachange_σ], markersize = 30, marker=:star4, 
+                color =:darkgreen, strokewidth = 1, strokecolor = :black)
+    vsbp = scatter!(ax1, δ_σ[idx_subcritical_σ], Cheight_havg_tavg_σ[idx_subcritical_σ], markersize = 30, 
+        marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+    vnp = scatter!(ax1, δ_UN[idx_VaryN], Cheight_havg_tavg_UN[idx_VaryN], markersize = 30, marker = :circle, 
+                color =:firebrick2, strokewidth = 1, strokecolor = :black)
+    vump = scatter!(ax1, δ_UN[idx_VaryU], Cheight_havg_tavg_UN[idx_VaryU], markersize = 30, marker=:utriangle, 
+                color = :dodgerblue2, strokewidth = 1, strokecolor = :black)
+
+    Legend( ga[1, 1:2],  [vnp, vump, vsp1, vsbp], ["Vary N₀", "Vary V₀", "Vary γ", "Subcritical γ"],
+                tellheight = false, tellwidth = false, rowgap = 30, colgap = 30,
+                margin = (10, 10, 10, 5), framevisible = false, patchlabelgap = 7,
+                labelsize = 40,
+                halign = :center, valign = :top, orientation = :horizontal)
+    rowsize!(ga, 1, Auto(0.05))       
+    colgap!(ga, 40)
+
+    Label(ga[2, 1, TopLeft()], "a",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (-10, 5, 5, 10),
+                    halign = :right)
+    Label(ga[2, 2, TopLeft()], "b",
+                    fontsize = 30,
+                    font = :bold,
+                    padding = (0, 5, 5, 10),
+                    halign = :right)
+
+display(f)
+savename = apath * "Paper_Dissip_v_Thickness_v_Delta_rms_log_rv"
+save(savename * ".png", f, px_per_unit = 2)
+   
