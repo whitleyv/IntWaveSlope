@@ -143,6 +143,65 @@ f = Figure(resolution = (1500, 800), fontsize=26)
 display(f)
 savename = apath * "Paper_Ozmidov_v_Thorpe_v_Delta_rms_log"
 save(savename * ".png", f, px_per_unit = 2)
+
+f = Figure(resolution = (2250, 1200), fontsize=39)
+    ga = f[1, 1] = GridLayout()
+
+    ax1 = Axis(ga[2, 1],  ylabel = rich("L", subscript("T"), superscript("2")," [m²]"), yscale = log10, xscale = log10,
+    xlabel = rich("ϵ̄/N", subscript("0"), superscript("3"), " [m²]"), xlabelsize=52, ylabelsize=52)
+    limits!(ax1, 1, 1150, 10, 40000)
+
+    ax2 = Axis(ga[2, 2],  ylabel = rich("h", subscript("w"), superscript("2")," [m²]"), yscale = log10,xscale = log10,
+    xlabel = rich("ϵ̄/N", subscript("0"), superscript("3"), " [m²]"), xlabelsize=52, ylabelsize=52)
+    limits!(ax2, 1, 1150, 10, 40000)
+
+    p_big = decompose(Point2f, Circle(Point2f(0), 0.6))
+    p_small = decompose(Point2f, Circle(Point2f(0), 0.5))
+    vsp1 = scatter!(ax1, eps_endAvg_σ[idx_gammachange_σ] ./ N_σ[idx_gammachange_σ].^3, thorpe_rms_σ[idx_gammachange_σ].^2, markersize = 37, marker=:star4, 
+            color =:darkgreen, strokewidth = 1.5, strokecolor = :black)
+    vsbp = scatter!(ax1, eps_endAvg_σ[idx_subcritical_σ] ./ N_σ[idx_subcritical_σ].^3, thorpe_rms_σ[idx_subcritical_σ].^2, markersize = 37, 
+            marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+    vump_mean = scatter!(ax1, eps_endAvg_U2[idx_VaryU2] ./ (N_UN[1]).^ 3, Lt_hmax_tavg_U2[idx_VaryU2].^2, markersize = 37, marker=:utriangle, 
+                color = :white, strokewidth = 4.5, strokecolor = :dodgerblue2)
+    vnp_rms = scatter!(ax1, eps_endAvg_UN[idx_VaryN] ./ (N_UN[idx_VaryN]).^ 3, thorpe_rms_UN[idx_VaryN].^2, markersize = 37, marker = :circle, 
+                color =:firebrick2, strokewidth = 1.5, strokecolor = :black)
+    vump_rms = scatter!(ax1, eps_endAvg_UN[idx_VaryU] ./ (N_UN[idx_VaryU]).^ 3, thorpe_rms_UN[idx_VaryU].^2, markersize = 37, marker=:dtriangle, 
+                color = :dodgerblue2, strokewidth = 1.5, strokecolor = :black)
+
+    scatter!(ax2, eps_endAvg_σ[idx_gammachange_σ]./ (N_σ[idx_gammachange_σ].^3), δ_σ[idx_gammachange_σ].^2, markersize = 37, marker=:star4, 
+                color =:darkgreen, strokewidth = 1.5, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_σ[idx_subcritical_σ]./ (N_σ[idx_subcritical_σ].^3), δ_σ[idx_subcritical_σ].^2, markersize = 37, 
+                marker=Polygon(p_big, [p_small]), color= :darkgoldenrod, )
+    scatter!(ax2, eps_endAvg_U2[idx_VaryU2]./ (N_UN[1]).^ 3, δ_U2[idx_VaryU2].^2, markersize = 37, marker=:utriangle, 
+                color = :white, strokewidth = 4.5, strokecolor = :dodgerblue2)
+    scatter!(ax2, eps_endAvg_UN[idx_VaryN]  ./ (N_UN[idx_VaryN]).^ 3, δ_UN[idx_VaryN].^2, markersize = 37, marker = :circle, 
+                color =:firebrick2, strokewidth = 1.5, strokecolor = :black)
+    scatter!(ax2, eps_endAvg_UN[idx_VaryU] ./ (N_UN[idx_VaryU]).^ 3, δ_UN[idx_VaryU].^2, markersize = 37, marker=:dtriangle, 
+                color = :dodgerblue2, strokewidth = 1.5, strokecolor = :black)
+
+    Legend(ga[1, 1:2], [vnp_rms, vump_rms, vump_mean, vsp1, vsbp], ["Vary N₀", "Vary V₀", "Vary V₀ᴮ", "Vary γ", "Subcritical γ"],
+                    tellheight = false, tellwidth = false, rowgap = 45, colgap = 45,
+                    margin = (10, 10, 10, 5), framevisible = false, patchlabelgap = 12,
+                    labelsize = 52,
+                    halign = :center, valign = :top, orientation = :horizontal)
+    rowsize!(ga,1, Auto(0.05))       
+    colgap!(ga, 45)
+    Label(ga[2, 1, TopLeft()], "a",
+                    fontsize = 45,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+    Label(ga[2, 2, TopLeft()], "b",
+                    fontsize = 45,
+                    font = :bold,
+                    padding = (5, 5, 5, 5),
+                    halign = :left)
+
+
+display(f)
+savename = apath * "Paper_Ozmidov_v_Thorpe_v_Delta_rms_log_higherres"
+save(savename * ".png", f, px_per_unit = 2)
+
 #=
 # best fit lines between ϵ/N³ vs Lₜ² or h_w², ie. h_w² = m_δ ϵ/N³
 epsN_endAvg_all = vcat(eps_endAvg_σ[idx_gammachange_σ] ./ N_σ[idx_gammachange_σ].^3, eps_endAvg_UN  ./ (N_UN.^ 3 ))

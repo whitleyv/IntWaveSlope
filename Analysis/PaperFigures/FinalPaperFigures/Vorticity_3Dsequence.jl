@@ -275,3 +275,74 @@ apath  =  "Analysis/Plots/"
 
 display(f)
 save(apath * savename * ".png", f, px_per_unit = 2)
+
+# higher res image
+f = Figure(resolution = (2240, 2122), fontsize=50);
+    gc = f[1, 1] = GridLayout()
+
+    # set up axes and axes labels
+    axωx1 = Axis3(gc[1, 1], azimuth = π/8, elevation = 0.15, aspect =(1,3,1), xtickwidth = 0, 
+        zticks = ([-500, -250, 0]),  zlabeloffset = 160,
+        zlabel = "z [m]", xticks = ([0, 150]))
+    axωx2 = Axis3(gc[2, 1], azimuth = π/8, elevation = 0.15, aspect =(1,3,1), xtickwidth = 0, 
+        zticks = ([-500, -250, 0]),  zlabeloffset = 160,
+        zlabel = "z [m]", xticks = ([0, 150]) )
+    axωx3 = Axis3(gc[3, 1], azimuth = π/8, elevation = 0.15, aspect =(1,3,1), xtickwidth = 0, 
+        zticks = ([-500, -250, 0]), yticks = ([0, 1000, 2000]), ylabeloffset = 55, zlabeloffset = 160,
+        xticks = ([0, 150]), xticklabelpad = -42, xlabeloffset = 60,
+        xlabel="x [m]", ylabel = "y [m]", zlabel = "z [m]" )
+        #left, right, bottom, top
+
+    #colsize!(f.layout, 2, Relative(0.05))
+
+    axes_ωx = [axωx1, axωx2, axωx3]
+
+    lower = Point3f.(LxCex, yc, -500);
+    upper = Point3f.(LxCex, yc, curvedslope.(yc));
+
+    for (p,ax) in enumerate(axes_ωx)
+        ax.limits = ((0,LxCex), (0,2100), (-500,0))
+        surface!(ax, -5:4:LxCex, yc, land, shading = true, color=fill((:black, .7),100,100))
+        band!(ax, lower, upper, color = (:black, 0.9), shading = true)
+
+    end
+
+    # get rid of the inner values
+    hideydecorations!(axωx1, grid = false)
+    hideydecorations!(axωx2, grid = false)
+    hidexdecorations!(axωx1, grid = false)
+    hidexdecorations!(axωx2, grid = false)
+
+    #colgap!(gc, -100)
+
+    cb = Colorbar(gc[1:3, 2], limits = (-.02, .02), colormap = newcolorbar, ticks = -.02:.005:.02,
+    label = "Spanwise Vorticity, ωₓ [s⁻¹]", height = Relative(0.9), width = 80,
+    labelpadding = 10.0, highclip = newcolorbar[end], lowclip = newcolorbar[1])
+    
+    colsize!(gc, 2, Relative(0.05))
+    #rowgap!(gc, -100)
+
+    time_pre = "t = "
+    time_post = " Tσ"
+
+    # for each time
+    for (p,j) in enumerate(time_idxs)
+        c_pos_ωx = clamp.(ω_x[:,:,:,p], .002, .02);
+        c_neg_ωx = clamp.(ω_x[:,:,:,p], -.02, -.002);
+
+        phaselabel = time_pre * @sprintf("%0.1f", wtimes[j]) * time_post
+
+        # create the heatmaps
+        cp_ωx = contour!(axes_ωx[p], xc, yc, zc, c_pos_ωx, levels = plevels, colormap = (cgrad(Makie.to_colormap(:curl)[256:end])), alpha=0.5)
+        cn_ωx = contour!(axes_ωx[p], xc, yc, zc, c_neg_ωx, levels = nlevels, colormap = (Reverse(cgrad(Makie.to_colormap(:curl)[1:256]))), alpha = 0.5)
+        text!(axes_ωx[p], Point.(2, 1500, -70), text = phaselabel, align = (:left, :center), color = :black, 
+        font = :bold, fontsize = 55, rotation = -π/60)
+
+    end
+
+    axωx1.protrusions = (150,0,0,0)
+    axωx2.protrusions = (150,0,0,0)
+    axωx3.protrusions = (150,0,100,0)
+
+savename = "vorticity_wx_3dwaveseries_doubleres_" * setname
+save(apath * savename * ".png", f)
